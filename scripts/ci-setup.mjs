@@ -135,11 +135,16 @@ async function configure() {
       security_captcha_enabled: true,
       security_captcha_provider: "turnstile",
       security_captcha_secret: need("TURNSTILE_SECRET_KEY"),
-      mailer_subjects_confirmation: "Confirm your SPIES account",
-      mailer_templates_confirmation_content: template("confirmation"),
-      mailer_subjects_recovery: "Reset your SPIES password",
-      mailer_templates_recovery_content: template("recovery"),
       refresh_token_rotation_enabled: true,
+      // Free projects can only customise emails once a custom SMTP provider is set.
+      ...(config.emailConfirmation
+        ? {
+            mailer_subjects_confirmation: "Confirm your SPIES account",
+            mailer_templates_confirmation_content: template("confirmation"),
+            mailer_subjects_recovery: "Reset your SPIES password",
+            mailer_templates_recovery_content: template("recovery"),
+          }
+        : {}),
     }),
   });
   console.log("Auth settings updated");
