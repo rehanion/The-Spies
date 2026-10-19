@@ -33,17 +33,21 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return error(new UploadError("Invalid upload request.", 400, "bad_request"));
   const body = parsed.data;
 
-  if (!(await consumeRateLimit("uploadInit", viewer.userId))) {
+  // Independent checks run together: each is a round trip to the database.
+  const supabase = await createClient();
+  const [allowed, { data: template }, catalog, quota] = await Promise.all([
+    consumeRateLimit("uploadInit", viewer.userId),
+    supabase.from("templates").select("id, creator_id, platform_id, publication_status").eq("id", body.templateId).maybeSingle(),
+    getCatalog(),
+    checkQuotas(viewer.userId, body.size).then(
+      () => null,
+      (e: unknown) => e,
+    ),
+  ]);
+  if (!allowed) {
     return error(new UploadError("Too many uploads in a short time. Wait a little and try again.", 429, "rate_limited"));
   }
-
   // Ownership check through RLS as the user.
-  const supabase = await createClient();
-  const { data: template } = await supabase
-    .from("templates")
-    .select("id, creator_id, platform_id, publication_status")
-    .eq("id", body.templateId)
-    .maybeSingle();
   if (!template || template.creator_id !== viewer.userId) {
     return error(new UploadError("Submission not found.", 404, "not_found"));
   }
@@ -52,8 +56,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { filename, extension } = precheckUpload(body, (await getCatalog()).rules(template.platform_id));
-    await checkQuotas(viewer.userId, body.size);
+    const { filename, extension } = precheckUpload(body, catalog.rules(template.platform_id));
+    if (quota) throw quota;
     const admin = createAdminClient();
     const l = limits();
 

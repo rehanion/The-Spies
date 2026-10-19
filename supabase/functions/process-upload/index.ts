@@ -74,19 +74,24 @@ async function processFile(db: SupabaseClient, id: string, limits: Limits): Prom
     .eq("validation_status", "pending");
   if (updateError) return json({ error: "update_failed" }, 500);
 
-  await db.rpc("log_event", {
-    p_action: result.ok ? "validation:passed" : "validation:failed",
-    p_template_id: row.template_id,
-    p_file_id: row.id,
-    p_details: { sha256, size: bytes.length, reason: result.ok ? null : result.reason },
-  });
+  // The audit log entry and cleanup finish after the response is sent.
+  afterResponse(
+    db.rpc("log_event", {
+      p_action: result.ok ? "validation:passed" : "validation:failed",
+      p_template_id: row.template_id,
+      p_file_id: row.id,
+      p_details: { sha256, size: bytes.length, reason: result.ok ? null : result.reason },
+    }).then(({ error }) => {
+      if (error) console.error("log_event failed", error.message);
+    }),
+  );
 
   if (!result.ok) {
     // Rejected content is not kept: free the quota, keep the record and hash.
-    await db.storage.from("quarantine").remove([row.storage_key]);
+    afterResponse(db.storage.from("quarantine").remove([row.storage_key]));
     return json({ status: "failed", reason: result.reason });
   }
-  startScan();
+  afterResponse(dispatchScan());
   return json({ status: "passed", sha256, size: bytes.length });
 }
 
@@ -112,9 +117,11 @@ async function dispatchScan(): Promise<number | null> {
   }
 }
 
-/** Runs dispatchScan after the response is sent. */
-function startScan() {
-  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(dispatchScan());
+/** Lets work finish after the response is sent. */
+function afterResponse(work: PromiseLike<unknown>) {
+  const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+  const p = Promise.resolve(work).catch((err) => console.error("background task failed", err));
+  if (runtime) runtime.waitUntil(p);
 }
 
 async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limits): Promise<Response> {
@@ -140,7 +147,7 @@ async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limi
       });
 
   // The original never becomes public; once processed it is no longer needed.
-  await db.storage.from(row.original_bucket).remove([row.original_key]);
+  afterResponse(db.storage.from(row.original_bucket).remove([row.original_key]));
 
   if (!result.ok) {
     await db
@@ -153,8 +160,10 @@ async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limi
   const publicKey = `shots/${row.template_id}/${crypto.randomUUID()}.${result.image.extension}`;
   const thumbKey = `shots/${row.template_id}/${crypto.randomUUID()}.${result.image.extension}`;
   const opts = { contentType: result.image.contentType, cacheControl: "31536000", upsert: false };
-  const up1 = await db.storage.from("previews").upload(publicKey, result.image.full, opts);
-  const up2 = await db.storage.from("previews").upload(thumbKey, result.image.thumb, opts);
+  const [up1, up2] = await Promise.all([
+    db.storage.from("previews").upload(publicKey, result.image.full, opts),
+    db.storage.from("previews").upload(thumbKey, result.image.thumb, opts),
+  ]);
   if (up1.error || up2.error) {
     await db.storage.from("previews").remove([publicKey, thumbKey]);
     await db
@@ -164,26 +173,27 @@ async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limi
     return json({ status: "failed", reason: "storage_error" }, 503);
   }
 
-  await db
-    .from("template_screenshots")
-    .update({
-      status: "ready",
-      public_key: publicKey,
-      thumb_key: thumbKey,
-      width: result.image.width,
-      height: result.image.height,
-      size_bytes: bytes.length,
-      public_size_bytes: result.image.full.length + result.image.thumb.length,
-      failure_reason: null,
-    })
-    .eq("id", row.id);
-
-  // First ready screenshot becomes the cover if none is chosen.
-  await db
-    .from("templates")
-    .update({ cover_screenshot_id: row.id })
-    .eq("id", row.template_id)
-    .is("cover_screenshot_id", null);
+  await Promise.all([
+    db
+      .from("template_screenshots")
+      .update({
+        status: "ready",
+        public_key: publicKey,
+        thumb_key: thumbKey,
+        width: result.image.width,
+        height: result.image.height,
+        size_bytes: bytes.length,
+        public_size_bytes: result.image.full.length + result.image.thumb.length,
+        failure_reason: null,
+      })
+      .eq("id", row.id),
+    // First ready screenshot becomes the cover if none is chosen.
+    db
+      .from("templates")
+      .update({ cover_screenshot_id: row.id })
+      .eq("id", row.template_id)
+      .is("cover_screenshot_id", null),
+  ]);
 
   return json({ status: "ready", width: result.image.width, height: result.image.height });
 }

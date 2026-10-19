@@ -19,13 +19,15 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/uploads
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
-  if (!(await consumeRateLimit("process", viewer.userId))) {
-    return NextResponse.json({ status: "error", message: "Too many requests. Wait a little and try again." }, { status: 429 });
-  }
-
   const supabase = await createClient();
   const table = parsed.data.kind === "file" ? "template_files" : "template_screenshots";
-  const { data: row } = await supabase.from(table).select("id, uploader_id").eq("id", id).maybeSingle();
+  const [allowed, { data: row }] = await Promise.all([
+    consumeRateLimit("process", viewer.userId),
+    supabase.from(table).select("id, uploader_id").eq("id", id).maybeSingle(),
+  ]);
+  if (!allowed) {
+    return NextResponse.json({ status: "error", message: "Too many requests. Wait a little and try again." }, { status: 429 });
+  }
   if (!row || row.uploader_id !== viewer.userId) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const result = await runProcessor({ kind: parsed.data.kind, id });

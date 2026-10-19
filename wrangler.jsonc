@@ -10,6 +10,9 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // Runs the Worker near the database (free), so the several database calls
+  // behind each page are short hops. Static files still come from the edge.
+  "placement": { "mode": "smart" },
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true }
