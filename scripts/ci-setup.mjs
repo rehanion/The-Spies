@@ -235,7 +235,7 @@ async function configure() {
         : []),
     ]),
   });
-  console.log(`Edge Function secrets updated (instant scans ${process.env.SCAN_DISPATCH_TOKEN ? "on" : "off"})`);
+  console.log(`::notice::Edge Function secrets updated (instant scans ${process.env.SCAN_DISPATCH_TOKEN ? "on" : "off"})`);
 
   // The scanner signs in like a person, so the scan job never holds a key that bypasses RLS.
   const url = need("NEXT_PUBLIC_SUPABASE_URL");
