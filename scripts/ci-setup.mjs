@@ -226,9 +226,16 @@ async function configure() {
     body: JSON.stringify([
       { name: "PROCESSOR_SECRET", value: need("PROCESSOR_SECRET") },
       { name: "SPIES_SERVICE_KEY", value: need("SUPABASE_SECRET_KEY") },
+      // Optional repository secret: lets each upload start the virus scan at once.
+      ...(process.env.SCAN_DISPATCH_TOKEN
+        ? [
+            { name: "SCAN_DISPATCH_TOKEN", value: process.env.SCAN_DISPATCH_TOKEN },
+            { name: "SCAN_REPOSITORY", value: need("GITHUB_REPOSITORY") },
+          ]
+        : []),
     ]),
   });
-  console.log("Edge Function secrets updated");
+  console.log(`Edge Function secrets updated (instant scans ${process.env.SCAN_DISPATCH_TOKEN ? "on" : "off"})`);
 
   // The scanner signs in like a person, so the scan job never holds a key that bypasses RLS.
   const url = need("NEXT_PUBLIC_SUPABASE_URL");

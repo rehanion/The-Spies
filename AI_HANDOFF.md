@@ -30,6 +30,7 @@ Live: https://spies.spies-4082fd.workers.dev
 - Accepted files: known template formats per platform (.mwml, .tml, .cht, .StdyCollct, .twconfig, .xml, .json, .pine, .txt, .md, .zip, .dll, .jar) plus any other extension, except programs, scripts, installers, shortcuts, disk images, macro Office files and non ZIP archives (see `BLOCKED_REASONS` in `supabase/functions/_shared/formats.ts`). Every file's content is also checked for executable or archive signatures.
 - Admins edit platforms, categories and each platform's accepted file types at /admin/catalog, and change user roles at /admin/users.
 - Email confirmation is off until SMTP is configured: an `smtp` block in `spies.deploy.json` plus the `SMTP_PASSWORD` repo secret turns on confirmation and password reset emails (plan: Brevo free, sender on spies.eu.org once approved).
+- Scheduled workflows (scan timer, keepalive) never ran on GitHub (checked 2026-10-19). The optional `SCAN_DISPATCH_TOKEN` repo secret lets the Edge Function start `scan.yml` after each passed file. On the Worker, read `NEXT_PUBLIC_*` values literally (`process.env.NEXT_PUBLIC_X`), never `process.env[name]`; they only exist where inlined at build.
 - Domain: owner chose a free eu.org domain (2026-10-19) and must request it at nic.eu.org with Cloudflare nameservers. When approved, set `customDomain` in `spies.deploy.json` (README explains the token permissions). Paid domains need the owner's OK.
 
 ## Stack

@@ -86,7 +86,27 @@ async function processFile(db: SupabaseClient, id: string, limits: Limits): Prom
     await db.storage.from("quarantine").remove([row.storage_key]);
     return json({ status: "failed", reason: result.reason });
   }
+  startScan();
   return json({ status: "passed", sha256, size: bytes.length });
+}
+
+// Starts the ClamAV workflow right away instead of waiting for its timer.
+// Optional: needs SCAN_DISPATCH_TOKEN (a GitHub token that can only run
+// Actions on this repository) and SCAN_REPOSITORY. Runs after the response.
+function startScan() {
+  const token = Deno.env.get("SCAN_DISPATCH_TOKEN");
+  const repo = Deno.env.get("SCAN_REPOSITORY");
+  if (!token || !repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return;
+  const run = fetch(`https://api.github.com/repos/${repo}/actions/workflows/scan.yml/dispatches`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "user-agent": "spies" },
+    body: JSON.stringify({ ref: "main" }),
+  })
+    .then((res) => {
+      if (!res.ok) console.error("scan dispatch failed", res.status);
+    })
+    .catch((err) => console.error("scan dispatch failed", err instanceof Error ? err.message : err));
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(run);
 }
 
 async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limits): Promise<Response> {
