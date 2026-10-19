@@ -50,7 +50,7 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border px-3.5 py-2 text-sm font-medium transition-[color,background-color,border-color,transform] duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
   }
   .btn-primary {
     @apply border-accent bg-accent text-accent-ink hover:bg-accent-strong;
@@ -65,7 +65,7 @@ body {
     @apply border-danger/60 bg-danger/10 text-danger hover:bg-danger/20;
   }
   .input {
-    @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-accent focus:outline-none;
+    @apply w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-fg transition-[border-color,box-shadow] duration-150 placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/25 focus:outline-none;
   }
   .label {
     @apply mb-1.5 block text-sm font-medium text-fg;
@@ -82,4 +82,50 @@ body {
   .kbd {
     @apply rounded border border-line-strong bg-surface-2 px-1.5 py-0.5 font-mono text-xs;
   }
+}
+
+/* Motion: short and quiet, and off for people who ask for less motion. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.page-in {
+  animation: rise-in 280ms ease-out both;
+}
+/* Cards in a grid arrive one after another. */
+.stagger > * {
+  animation: rise-in 320ms ease-out both;
+}
+.stagger > *:nth-child(2) { animation-delay: 30ms; }
+.stagger > *:nth-child(3) { animation-delay: 60ms; }
+.stagger > *:nth-child(4) { animation-delay: 90ms; }
+.stagger > *:nth-child(5) { animation-delay: 120ms; }
+.stagger > *:nth-child(6) { animation-delay: 150ms; }
+.stagger > *:nth-child(7) { animation-delay: 180ms; }
+.stagger > *:nth-child(n + 8) { animation-delay: 210ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+}
+.pop-in {
+  animation: pop-in 140ms ease-out;
 }

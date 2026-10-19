@@ -69,7 +69,7 @@ export default function SecurityPage() {
         </ul>
         <p>
           Limits: {formatBytes(l.maxTemplateFileBytes)} per file, {l.maxFilesPerTemplate} files per template, {formatBytes(l.maxScreenshotBytes)} per
-          screenshot. Screenshots are re-encoded to JPEG on the server; SVG and HTML are never served.
+          screenshot. Screenshots are converted to JPEG on the server; SVG and HTML are never served.
         </p>
         <p>Always refused: {Object.keys(BLOCKED_REASONS).map((e) => `.${e}`).join(", ")}.</p>
       </section>

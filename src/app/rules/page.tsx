@@ -37,14 +37,14 @@ export default function RulesPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li>Review a template only after trying it. One review per template; you cannot review your own work.</li>
           <li>No harassment, hate, threats or personal attacks.</li>
-          <li>No fake accounts, vote manipulation or automated downloading to inflate counts. Download counts are de-duplicated and suspicious activity is ignored.</li>
+          <li>No fake accounts, vote manipulation or automated downloading to inflate counts. Each person counts once per download, and suspicious activity is ignored.</li>
         </ul>
       </section>
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-fg">Using downloaded templates</h2>
         <p>
-          Templates are shared by community members, as-is, for educational use. They are not trading advice. Nothing is installed automatically: you choose
+          Templates are shared by community members, as is, for educational use. They are not trading advice. Nothing is installed automatically: you choose
           whether to import a file into your own platform. Read <Link href="/security" className="underline">how files are checked</Link> before you do.
         </p>
       </section>

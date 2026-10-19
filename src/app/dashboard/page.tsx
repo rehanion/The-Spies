@@ -107,7 +107,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                         {pendingScan ? <span className="block text-warn">{pendingScan} awaiting scan</span> : null}
                       </td>
                       <td className="px-4 py-3 text-right font-mono">{formatCount(t.download_count)}</td>
-                      <td className="px-4 py-3 text-right font-mono text-xs">{t.rating_count ? `★ ${Number(t.rating_avg).toFixed(1)} (${t.rating_count})` : "—"}</td>
+                      <td className="px-4 py-3 text-right font-mono text-xs">{t.rating_count ? `★ ${Number(t.rating_avg).toFixed(1)} (${t.rating_count})` : "None"}</td>
                       <td className="px-4 py-3 text-xs text-fg-subtle">{formatDate(t.updated_at)}</td>
                     </tr>
                   );

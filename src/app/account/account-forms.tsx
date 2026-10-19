@@ -108,7 +108,7 @@ export function AvatarForm({ hasAvatar, maxBytes }: { hasAvatar: boolean; maxByt
           </button>
         ) : null}
       </div>
-      <p className="hint">PNG, JPEG or WebP, at least 200×120 pixels. It is re-encoded on the server and metadata is stripped.</p>
+      <p className="hint">PNG, JPEG or WebP, at least 200×120 pixels. It is converted on the server and metadata is stripped.</p>
       <Message state={state} />
     </div>
   );

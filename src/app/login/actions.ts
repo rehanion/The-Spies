@@ -51,7 +51,7 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
     const field = parsed.error.issues[0]?.path[0];
     const messages: Record<string, string> = {
       email: "Enter a valid email address.",
-      username: "Usernames are 3–24 characters: lowercase letters, numbers and underscores.",
+      username: "Usernames are 3 to 24 characters: lowercase letters, numbers and underscores.",
       password: "Passwords need at least 10 characters including a letter and a number.",
       rules: "You must accept the acceptable use rules.",
     };
@@ -72,7 +72,7 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
   if (error) {
     if (error.status === 429) return { ok: false, message: "Too many signups right now (email sending is rate limited on the free plan). Try again later." };
     if (error.code === "weak_password") return { ok: false, message: "Choose a stronger password." };
-    return { ok: false, message: "Sign-up failed. If you already have an account, sign in instead." };
+    return { ok: false, message: "Sign up failed. If you already have an account, sign in instead." };
   }
   // With email confirmation turned off (no custom SMTP yet) the account is active straight away.
   if (data.session) redirect("/dashboard");

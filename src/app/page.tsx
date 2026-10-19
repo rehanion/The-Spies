@@ -38,7 +38,7 @@ export default async function HomePage() {
           <div>
             <h1 className="text-lg font-semibold text-fg">Share and discover trading layouts</h1>
             <p className="mt-1 text-sm text-fg-muted">
-              Free templates for MotiveWave, Sierra Chart and Quantower. Every file is virus-scanned before it goes live.
+              Free templates for MotiveWave, Sierra Chart and Quantower. Every file is virus scanned before it goes live.
             </p>
           </div>
           <div className="flex gap-2">

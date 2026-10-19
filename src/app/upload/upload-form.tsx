@@ -286,7 +286,7 @@ export function UploadForm({
               </div>
               <div>
                 <label htmlFor="dependencies" className="label">Requirements</label>
-                <input id="dependencies" name="dependencies" maxLength={2000} className="input" placeholder="Data feed, built-in studies…" />
+                <input id="dependencies" name="dependencies" maxLength={2000} className="input" placeholder="Data feed, built in studies…" />
               </div>
               <div>
                 <label htmlFor="license_text" className="label">License details <span className="font-normal text-fg-subtle">(custom license only)</span></label>

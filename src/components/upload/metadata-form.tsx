@@ -119,7 +119,7 @@ export function MetadataForm({
         </div>
         <div className="sm:col-span-2">
           <label htmlFor="dependencies" className="label">Dependencies</label>
-          <textarea id="dependencies" name="dependencies" rows={2} maxLength={2000} defaultValue={values.dependencies} className="input" placeholder="Data feed requirements, built-in studies, other templates…" />
+          <textarea id="dependencies" name="dependencies" rows={2} maxLength={2000} defaultValue={values.dependencies} className="input" placeholder="Data feed requirements, built in studies, other templates…" />
         </div>
         <div>
           <label htmlFor="license_code" className="label">License</label>

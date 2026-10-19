@@ -194,7 +194,7 @@ export function ScreenshotsManager({
         </button>
       )}
       <p className="hint">
-        PNG, JPEG or WebP, up to {formatBytes(maxBytes)} each, {maxCount} max. Images are re-encoded on the server and stripped of metadata before anyone else sees them.
+        PNG, JPEG or WebP, up to {formatBytes(maxBytes)} each, {maxCount} max. Images are converted on the server and stripped of metadata before anyone else sees them.
       </p>
     </div>
   );

@@ -91,7 +91,7 @@ export default async function LibraryPage() {
                     <td className="px-4 py-2.5">
                       {d.template ? <Link href={`/t/${d.template.slug}`} className="text-fg hover:text-accent">{d.template.title}</Link> : <span className="text-fg-subtle">Unavailable</span>}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">{d.file?.original_filename ?? "—"}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-fg-muted">{d.file?.original_filename ?? "None"}</td>
                     <td className="px-4 py-2.5 text-xs text-fg-subtle">{formatDateTime(d.created_at)}</td>
                   </tr>
                 ))}

@@ -10,7 +10,7 @@ import { storage } from "@/lib/storage";
 export type AccountState = { ok: boolean; message: string } | null;
 
 const profileSchema = z.object({
-  username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, "3–24 lowercase letters, numbers or underscores."),
+  username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,24}$/, "3 to 24 lowercase letters, numbers or underscores."),
   display_name: z.string().trim().max(60, "At most 60 characters."),
   bio: z.string().trim().max(1000, "At most 1000 characters."),
 });

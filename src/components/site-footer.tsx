@@ -8,7 +8,7 @@ export function SiteFooter() {
         <div className="md:col-span-2">
           <Logo />
           <p className="mt-3 max-w-md text-fg-muted">
-            A free community library of trading-platform templates, workspaces and study configurations. No ads, no paid
+            A free community library of trading platform templates, workspaces and study configurations. No ads, no paid
             tiers. Every file is quarantined, structurally validated and scanned with ClamAV before it can be
             downloaded, and moderators remove anything that breaks the rules.
           </p>

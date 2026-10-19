@@ -49,7 +49,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
                     <dt className="text-fg-subtle">Claimant</dt><dd>{r.claimant_name}</dd>
                     <dt className="text-fg-subtle">Contact</dt><dd>{r.contact_email}</dd>
                     <dt className="text-fg-subtle">Original work</dt><dd className="break-all">{r.original_work_url}</dd>
-                    <dt className="text-fg-subtle">Good-faith statement</dt><dd>{r.good_faith_statement ? "yes" : "no"}</dd>
+                    <dt className="text-fg-subtle">Good faith statement</dt><dd>{r.good_faith_statement ? "yes" : "no"}</dd>
                   </dl>
                 ) : r.contact_email ? <p className="mt-1 text-xs text-fg-subtle">Contact: {r.contact_email}</p> : null}
                 {r.status === "open" ? <ReportResolveForm reportId={r.id} /> : <p className="mt-2 text-xs text-fg-subtle">{r.status} {formatDateTime(r.resolved_at)} {r.resolution_note ? `· ${r.resolution_note}` : ""}</p>}

@@ -45,7 +45,7 @@ export function SignupForm({ siteKey, nonce }: { siteKey: string; nonce?: string
       <div>
         <label htmlFor="username" className="label">Username</label>
         <input id="username" name="username" autoComplete="username" required minLength={3} maxLength={24} pattern="[a-z0-9_]{3,24}" className="input" aria-describedby="username-hint" />
-        <p id="username-hint" className="hint">3–24 lowercase letters, numbers or underscores. Shown publicly.</p>
+        <p id="username-hint" className="hint">3 to 24 lowercase letters, numbers or underscores. Shown publicly.</p>
       </div>
       <div>
         <label htmlFor="email" className="label">Email</label>

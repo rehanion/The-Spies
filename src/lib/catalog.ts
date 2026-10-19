@@ -32,7 +32,7 @@ export const LICENSES: Record<string, { label: string; summary: string; url?: st
   },
   "cc-by-nc-4.0": {
     label: "CC BY-NC 4.0",
-    summary: "Share and adapt with attribution, non-commercial use only.",
+    summary: "Share and adapt with attribution, noncommercial use only.",
     url: "https://creativecommons.org/licenses/by-nc/4.0/",
   },
   "cc0-1.0": {

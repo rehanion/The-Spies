@@ -31,7 +31,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-fg-subtle">{formatDateTime(e.created_at)}</td>
                 <td className="px-3 py-2">{e.actor_id ? names.get(e.actor_id) ?? "deleted user" : "system"}</td>
                 <td className="px-3 py-2 font-mono text-fg">{e.action}</td>
-                <td className="px-3 py-2">{e.template_id ? <Link className="underline" href={`/admin/submissions/${e.template_id}`}>open</Link> : "—"}</td>
+                <td className="px-3 py-2">{e.template_id ? <Link className="underline" href={`/admin/submissions/${e.template_id}`}>open</Link> : "None"}</td>
                 <td className="max-w-md break-all px-3 py-2 font-mono text-fg-subtle">{JSON.stringify(e.details)}</td>
               </tr>
             ))}

@@ -39,7 +39,7 @@ export default async function AccountPage() {
       </section>
 
       <section className="card space-y-4 p-5" aria-labelledby="signin-h">
-        <h2 id="signin-h" className="text-lg font-semibold text-fg">Sign-in</h2>
+        <h2 id="signin-h" className="text-lg font-semibold text-fg">Sign in</h2>
         <EmailForm email={viewer.email ?? ""} />
         <p className="text-sm text-fg-muted">
           To change your password, <Link href="/reset-password" className="underline">set a new password</Link> while signed in.

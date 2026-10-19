@@ -45,7 +45,7 @@ export async function SiteHeader() {
               <summary className="flex h-9 cursor-pointer list-none items-center rounded-full [&::-webkit-details-marker]:hidden" aria-label="Account menu">
                 <Avatar username={profile.username} avatarKey={profile.avatar_key} size={32} />
               </summary>
-              <div className="absolute right-0 mt-2 w-60 overflow-hidden rounded-xl border border-line-strong bg-surface-2 py-1 text-sm shadow-xl">
+              <div className="pop-in absolute right-0 mt-2 w-60 origin-top-right overflow-hidden rounded-xl border border-line-strong bg-surface-2 py-1 text-sm shadow-xl">
                 <div className="flex items-center gap-3 border-b border-line px-3 py-3">
                   <Avatar username={profile.username} avatarKey={profile.avatar_key} size={36} />
                   <div className="min-w-0">

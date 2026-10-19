@@ -11,10 +11,10 @@ export function TemplateCard({ item }: { item: TemplateListItem }) {
   return (
     <article className="group">
       <Link href={`/t/${item.slug}`} className="block rounded-xl focus-visible:outline-offset-2">
-        <div className="relative aspect-video overflow-hidden rounded-xl bg-surface-2">
+        <div className="relative aspect-video overflow-hidden rounded-xl bg-surface-2 ring-1 ring-transparent transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lg group-hover:shadow-black/30 group-hover:ring-line-strong">
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" />
+            <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]" />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-fg-subtle">No screenshot</div>
           )}
@@ -51,7 +51,7 @@ export function TemplateCard({ item }: { item: TemplateListItem }) {
 
 export function TemplateGrid({ items }: { items: TemplateListItem[] }) {
   return (
-    <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="stagger grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((item) => (
         <TemplateCard key={item.id} item={item} />
       ))}

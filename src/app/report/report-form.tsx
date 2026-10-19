@@ -67,7 +67,7 @@ export function ReportForm({
       <div>
         <label htmlFor="contact_email" className="label">Contact email{copyright ? "" : " (optional)"}</label>
         <input id="contact_email" name="contact_email" type="email" maxLength={254} required={copyright} className="input" autoComplete="email" />
-        <p className="hint">Only moderators see it. We use it to ask follow-up questions.</p>
+        <p className="hint">Only moderators see it. We use it to ask follow up questions.</p>
       </div>
       <div>
         <label htmlFor="details" className="label">Details</label>

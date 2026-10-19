@@ -6,9 +6,9 @@ import { publicEnv } from "@/lib/env";
 
 export const metadata: Metadata = {
   metadataBase: new URL(publicEnv.siteUrl()),
-  title: { default: "SPIES — trading template library", template: "%s · SPIES" },
+  title: { default: "SPIES | Trading template library", template: "%s · SPIES" },
   description:
-    "Free community library of MotiveWave, Sierra Chart and Quantower templates: footprint, volume profile, DOM, delta and order-flow workspaces with screenshots.",
+    "Free community library of MotiveWave, Sierra Chart and Quantower templates: footprint, volume profile, DOM, delta and order flow workspaces with screenshots.",
 };
 
 export const viewport: Viewport = {
@@ -24,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           Skip to content
         </a>
         <SiteHeader />
-        <main id="main" className="flex-1">
+        <main id="main" className="page-in flex-1">
           {children}
         </main>
         <SiteFooter />

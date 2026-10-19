@@ -51,7 +51,7 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
         </div>
 
         <section aria-labelledby="shots-h">
-          <h3 id="shots-h" className="mb-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">Screenshots (server re-encoded)</h3>
+          <h3 id="shots-h" className="mb-2 text-sm font-semibold uppercase tracking-wider text-fg-muted">Screenshots (converted on the server)</h3>
           <div className="grid gap-2 sm:grid-cols-3">
             {(shots ?? []).map((s) => (
               <figure key={s.id} className="card overflow-hidden">
@@ -84,11 +84,11 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
                     <span className="ml-auto flex gap-1.5"><ValidationBadge status={f.validation_status} /><ScanBadge status={f.scan_status} /></span>
                   </div>
                   <dl className="mt-2 grid gap-x-4 gap-y-1 text-xs sm:grid-cols-[max-content_1fr]">
-                    <dt className="text-fg-subtle">Server SHA-256</dt><dd className="break-all font-mono text-fg">{f.sha256 ?? "—"}</dd>
+                    <dt className="text-fg-subtle">Server SHA-256</dt><dd className="break-all font-mono text-fg">{f.sha256 ?? "None"}</dd>
                     <dt className="text-fg-subtle">Size</dt><dd>{formatBytes(f.size_bytes)} (declared {formatBytes(f.declared_size_bytes)})</dd>
-                    <dt className="text-fg-subtle">Detected</dt><dd>{f.detected_format ?? "—"}</dd>
+                    <dt className="text-fg-subtle">Detected</dt><dd>{f.detected_format ?? "None"}</dd>
                     <dt className="text-fg-subtle">Uploaded</dt><dd>{formatDateTime(f.uploaded_at)}</dd>
-                    <dt className="text-fg-subtle">Approved hash</dt><dd className="break-all font-mono">{f.approved_sha256 ?? "—"}</dd>
+                    <dt className="text-fg-subtle">Approved hash</dt><dd className="break-all font-mono">{f.approved_sha256 ?? "None"}</dd>
                   </dl>
                   {report?.error ? <p className="mt-2 text-xs text-danger">Validation: {report.error}</p> : null}
                   {report?.checks?.length ? (
@@ -128,12 +128,12 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
 
         <section aria-labelledby="meta-h" className="space-y-3 text-sm">
           <h3 id="meta-h" className="text-sm font-semibold uppercase tracking-wider text-fg-muted">Listing details</h3>
-          <p><span className="text-fg-subtle">Summary:</span> {t.summary || "—"}</p>
-          <div><p className="text-fg-subtle">Description</p><p className="prose-plain">{t.description || "—"}</p></div>
-          <div><p className="text-fg-subtle">Installation</p><p className="prose-plain">{t.install_steps || "—"}</p></div>
-          <div><p className="text-fg-subtle">Dependencies</p><p className="prose-plain">{t.dependencies || "—"}</p></div>
+          <p><span className="text-fg-subtle">Summary:</span> {t.summary || "None"}</p>
+          <div><p className="text-fg-subtle">Description</p><p className="prose-plain">{t.description || "None"}</p></div>
+          <div><p className="text-fg-subtle">Installation</p><p className="prose-plain">{t.install_steps || "None"}</p></div>
+          <div><p className="text-fg-subtle">Dependencies</p><p className="prose-plain">{t.dependencies || "None"}</p></div>
           <p><span className="text-fg-subtle">License:</span> {LICENSES[t.license_code]?.label} {t.license_text ? `· ${t.license_text}` : ""}</p>
-          <p><span className="text-fg-subtle">Rights attested:</span> {t.rights_attested ? "yes" : "no"} · <span className="text-fg-subtle">Tags:</span> {t.tags.join(", ") || "—"}</p>
+          <p><span className="text-fg-subtle">Rights attested:</span> {t.rights_attested ? "yes" : "no"} · <span className="text-fg-subtle">Tags:</span> {t.tags.join(", ") || "None"}</p>
         </section>
       </div>
 

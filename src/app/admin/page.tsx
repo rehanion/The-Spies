@@ -53,15 +53,15 @@ export default async function AdminOverview() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Link href="/admin/queue" className="card p-4 hover:border-line-strong">
           <p className="text-xs text-fg-subtle">Listings awaiting review</p>
-          <p className="mt-1 font-mono text-2xl text-fg">{u?.pending_review_count ?? "—"}</p>
+          <p className="mt-1 font-mono text-2xl text-fg">{u?.pending_review_count ?? "n/a"}</p>
         </Link>
         <Link href="/admin/queue#scan" className="card p-4 hover:border-line-strong">
           <p className="text-xs text-fg-subtle">Files awaiting a scan</p>
-          <p className="mt-1 font-mono text-2xl text-fg">{u?.pending_scan_count ?? "—"}</p>
+          <p className="mt-1 font-mono text-2xl text-fg">{u?.pending_scan_count ?? "n/a"}</p>
         </Link>
         <Link href="/admin/reports" className="card p-4 hover:border-line-strong">
           <p className="text-xs text-fg-subtle">Open reports</p>
-          <p className="mt-1 font-mono text-2xl text-fg">{u?.open_report_count ?? "—"}</p>
+          <p className="mt-1 font-mono text-2xl text-fg">{u?.open_report_count ?? "n/a"}</p>
         </Link>
         <div className="card p-4">
           <p className="text-xs text-fg-subtle">Storage used (app allowance)</p>
