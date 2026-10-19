@@ -1,0 +1,79 @@
+# Publishes the site on every push to main (and on demand):
+#  1. Supabase: database migrations, the process-upload Edge Function, Auth
+#     settings, function secrets and the scanner account.
+#  2. Cloudflare: Turnstile widget, Worker secrets, then the Worker itself.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   SUPABASE_ACCESS_TOKEN   supabase.com/dashboard/account/tokens
+#   CLOUDFLARE_API_TOKEN    "Edit Cloudflare Workers" template + Account → Turnstile → Edit
+# Everything else is looked up or derived by scripts/ci-setup.mjs. Both
+# services stay on their free plans; nothing here can turn on billing.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Look up keys
+        run: |
+          node scripts/ci-setup.mjs supabase
+          node scripts/ci-setup.mjs cloudflare
+
+      - name: Database migrations
+        run: |
+          REF=$(node -p "require('./spies.deploy.json').supabaseProjectRef")
+          npx supabase link --project-ref "$REF" < /dev/null
+          npx supabase db push --linked --include-all < /dev/null
+
+      - name: Edge Function
+        run: |
+          REF=$(node -p "require('./spies.deploy.json').supabaseProjectRef")
+          npx supabase functions deploy process-upload --project-ref "$REF" --use-api
+
+      - name: Auth settings, function secrets and scanner account
+        run: node scripts/ci-setup.mjs configure
+
+      - name: Build
+        run: npx opennextjs-cloudflare build
+
+      - name: Deploy Worker
+        run: |
+          node -e '
+            const keys = ["SUPABASE_SECRET_KEY", "PROCESSOR_SECRET", "ACTOR_HASH_SALT", "TURNSTILE_SECRET_KEY"];
+            require("fs").writeFileSync("/tmp/worker-secrets.json", JSON.stringify(Object.fromEntries(keys.map((k) => [k, process.env[k]]))));
+          '
+          npx wrangler deploy --secrets-file /tmp/worker-secrets.json
+          rm -f /tmp/worker-secrets.json
+
+      - name: Check the live site
+        run: |
+          sleep 5
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$NEXT_PUBLIC_SITE_URL/")
+          echo "Home page: HTTP $code"
+          test "$code" = 200
+          echo "### Live at $NEXT_PUBLIC_SITE_URL" >> "$GITHUB_STEP_SUMMARY"

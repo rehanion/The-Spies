@@ -3,10 +3,9 @@
 # account, scans them with up-to-date ClamAV signatures and records the result.
 # With auto-publish on, clean listings go live right after this job.
 #
-# Repository secrets (Settings → Secrets and variables → Actions):
-#   SPIES_SUPABASE_URL           e.g. https://abcd.supabase.co
-#   SPIES_SUPABASE_PUBLISHABLE_KEY  sb_publishable_... (public value)
-#   SPIES_SCANNER_EMAIL / SPIES_SCANNER_PASSWORD  a moderator account used only for scanning
+# Needs the SUPABASE_ACCESS_TOKEN repository secret. The scanner signs in as
+# the moderator account that the Deploy workflow creates; it never uses a key
+# that bypasses Row Level Security.
 name: Virus scan
 
 on:
@@ -33,6 +32,16 @@ jobs:
           node-version: 22
 
       # Only the script's one dependency is installed; the website is not built here.
+      - name: Look up the scanner login
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          node scripts/ci-setup.mjs supabase
+          # The scanner only needs its own login; drop the server key from this job.
+          echo "SUPABASE_SECRET_KEY=" >> "$GITHUB_ENV"
+          echo "PROCESSOR_SECRET=" >> "$GITHUB_ENV"
+          echo "ACTOR_HASH_SALT=" >> "$GITHUB_ENV"
+
       - name: Install scanner dependencies
         run: |
           mkdir -p /tmp/scanner && cp scripts/admin-scan.mjs /tmp/scanner/
@@ -60,9 +69,4 @@ jobs:
 
       - name: Scan pending files
         working-directory: /tmp/scanner
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SPIES_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SPIES_SUPABASE_PUBLISHABLE_KEY }}
-          SPIES_ADMIN_EMAIL: ${{ secrets.SPIES_SCANNER_EMAIL }}
-          SPIES_ADMIN_PASSWORD: ${{ secrets.SPIES_SCANNER_PASSWORD }}
         run: node admin-scan.mjs --limit 100

@@ -60,7 +60,7 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
   const supabase = await createClient();
   const { data: taken } = await supabase.from("profiles").select("id").eq("username", parsed.data.username).maybeSingle();
   if (taken) return { ok: false, message: "That username is taken." };
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
     options: {
@@ -74,6 +74,8 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
     if (error.code === "weak_password") return { ok: false, message: "Choose a stronger password." };
     return { ok: false, message: "Sign-up failed. If you already have an account, sign in instead." };
   }
+  // With email confirmation turned off (no custom SMTP yet) the account is active straight away.
+  if (data.session) redirect("/dashboard");
   return { ok: true, message: "Check your email for a confirmation link to activate your account." };
 }
 

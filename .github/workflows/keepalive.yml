@@ -17,18 +17,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: spies.deploy.json
+          sparse-checkout-cone-mode: false
+
       - name: Touch the database
-        env:
-          URL: ${{ secrets.SPIES_SUPABASE_URL }}
-          KEY: ${{ secrets.SPIES_SUPABASE_PUBLISHABLE_KEY }}
         run: |
-          curl -fsS "$URL/rest/v1/platforms?select=id&limit=1" -H "apikey: $KEY" -o /dev/null
+          REF=$(node -p "require('./spies.deploy.json').supabaseProjectRef")
+          KEY=$(node -p "require('./spies.deploy.json').supabasePublishableKey")
+          curl -fsS "https://$REF.supabase.co/rest/v1/platforms?select=id&limit=1" -H "apikey: $KEY" -o /dev/null
           echo "Database reachable"
 
       - name: Keep scheduled workflows enabled
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for wf in scan.yml keepalive.yml; do
+          for wf in scan.yml keepalive.yml deploy.yml; do
             gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable" || true
           done

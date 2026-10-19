@@ -139,6 +139,25 @@ form, profile/avatar re-encoding and phone-width layouts.
 You need a GitHub (or local) copy of this repo, a **Supabase** account and a **Cloudflare** account. Neither
 needs a payment method for this setup. Do not add one.
 
+### Automatic (recommended)
+
+`.github/workflows/deploy.yml` does every step below on each push to `main`. It needs two repository secrets:
+
+- `SUPABASE_ACCESS_TOKEN` from supabase.com/dashboard/account/tokens
+- `CLOUDFLARE_API_TOKEN` from the "Edit Cloudflare Workers" template, plus **Account → Turnstile → Edit**
+
+The project ref and public key live in `spies.deploy.json`. `scripts/ci-setup.mjs` reads the Supabase keys,
+derives the processor secret, hash salt and scanner password from the Supabase secret key, creates the
+Turnstile widget and the scanner moderator account, and configures Auth. The site is served at
+`https://spies.<your-subdomain>.workers.dev`.
+
+**Email.** Supabase's built-in email only delivers to the project's own team, so `emailConfirmation` is
+`false` in `spies.deploy.json`: new accounts are active immediately (Turnstile still blocks bots), and password
+reset emails will not reach the public. To turn both on, add a free SMTP provider (for example Brevo or Resend)
+under Supabase → Authentication → Emails → SMTP, then set `emailConfirmation` to `true`.
+
+The manual steps below are the same thing done by hand.
+
 ### 1. Supabase project (Free plan)
 
 1. Create a project at https://supabase.com/dashboard in an organization on the **Free** plan.
@@ -267,14 +286,9 @@ releases appear.
 
 ## Manual tasks remaining
 
-These need your accounts and cannot be done from the repository:
-
-1. Create the Supabase project, push migrations, deploy the function and set `PROCESSOR_SECRET`.
-2. Configure Supabase Auth: URLs, email templates, password policy, Turnstile CAPTCHA, ideally free SMTP.
-3. Create the Turnstile widget.
-4. Set Worker secrets and public build variables, then `npm run deploy`.
-5. Sign up and promote yourself to admin with the SQL above.
-6. Create a moderator account for the scanner and add the four `SPIES_*` secrets to the GitHub repository.
-7. Decide whether to seed demo content in production (`npm run seed:demo`), and remove it once real listings
+1. Create a public GitHub repository, push this code, and add the two deploy secrets above.
+2. Sign up on the live site, then promote yourself to admin with the SQL above.
+3. Optional: add free SMTP so email confirmation and password reset work (see **Email** above).
+4. Decide whether to seed demo content in production (`npm run seed:demo`), and remove it once real listings
    exist (`npm run seed:demo -- --remove`).
-8. Have the acceptable-use rules and copyright process reviewed for your jurisdiction.
+5. Have the acceptable-use rules and copyright process reviewed for your jurisdiction.
