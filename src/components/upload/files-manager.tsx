@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { formatBytes } from "@/lib/format";
+import { acceptsExtension } from "@shared/formats.ts";
 import { ScanBadge, ValidationBadge } from "@/components/badges";
 import { completeUpload, deleteUpload, putWithProgress, reserveUpload } from "./direct-upload";
 
@@ -46,8 +47,8 @@ export function FilesManager({
   async function handle(file: File, replacesFileId: string | null) {
     setError(null);
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    if (!accept.includes(ext)) {
-      setJob({ name: file.name, progress: 0, phase: "error", message: `.${ext} is not accepted for this platform. Allowed: ${accept.map((a) => "." + a).join(", ")}.` });
+    if (!acceptsExtension(accept, ext)) {
+      setJob({ name: file.name, progress: 0, phase: "error", message: `.${ext} is not accepted for this platform. Allowed: ${accept.filter((a) => a !== "other").map((a) => "." + a).join(", ")}.` });
       return;
     }
     if (file.size > maxBytes) {
@@ -100,7 +101,7 @@ export function FilesManager({
         type="file"
         className="sr-only"
         aria-label="Choose a template file"
-        accept={accept.map((a) => "." + a).join(",")}
+        accept={accept.includes("other") ? undefined : accept.map((a) => "." + a).join(",")}
         onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = "";
@@ -184,9 +185,8 @@ export function FilesManager({
         </button>
       )}
       <p className="hint">
-        Accepted: {accept.map((a) => "." + a).join(", ")} · up to {formatBytes(maxBytes)} each · {maxFiles} files max. ZIP packages may
-        only contain the configuration types above plus .txt/.md readmes. DLL, JAR, executables, scripts and nested or
-        encrypted archives are rejected.
+        Accepted: {accept.filter((a) => a !== "other").map((a) => "." + a).join(", ")}{accept.includes("other") ? " and most other files (no programs or scripts)" : ""} · up to {formatBytes(maxBytes)} each · {maxFiles} files max. Programs, installers, scripts and
+        nested or encrypted archives are always rejected. Plugins and file types we cannot check are reviewed by a moderator.
       </p>
     </div>
   );

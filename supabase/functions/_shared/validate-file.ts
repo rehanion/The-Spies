@@ -3,7 +3,7 @@
 // quarantine bucket. Validation is not a malware scan; it only rejects content
 // that is malformed or outside the allowlist.
 
-import { CODE_FORMATS, FORMATS, checkUploadExtension, extensionOf, type PlatformFormats } from "./formats.ts";
+import { CODE_FORMATS, FORMATS, OTHER_FORMAT, acceptsExtension, checkUploadExtension, extensionOf, type PlatformFormats } from "./formats.ts";
 import type { Limits } from "./limits.ts";
 import { FORBIDDEN_CONTENT, describeSniffed, inspectPeLibrary, sniff } from "./magic.ts";
 import { inspectZip, type ZipEntryInfo } from "./zip.ts";
@@ -14,6 +14,8 @@ export interface ValidationReport {
   checks: string[];
   /** True when the file holds compiled code that runs inside the trading platform. */
   containsCode?: boolean;
+  /** True when the file (or a file in the ZIP) is a type SPIES cannot check, so a moderator must look at it. */
+  needsReview?: boolean;
   entries?: Pick<ZipEntryInfo, "name" | "uncompressedSize">[];
 }
 
@@ -133,12 +135,21 @@ export function validateTemplateFile(
     }
     const inner = (rules?.zipInner ?? []).filter((e) => e !== "zip" && e !== "jar");
     const code = Object.fromEntries(inner.filter((e) => CODE_FORMATS.has(e)).map((e) => [e, "pe-executable" as const]));
+    const anyOther = inner.includes(OTHER_FORMAT);
     let codeInside = false;
+    let otherInside = false;
     const result = inspectZip(
       data,
       zipLimits,
-      inner,
+      anyOther ? "any" : inner,
       (name, innerExt, content) => {
+        if (anyOther) {
+          if (!acceptsExtension(inner, innerExt)) return `"${name}" is not an allowed file type inside a package.`;
+          if (!FORMATS[innerExt]) {
+            otherInside = true;
+            return null;
+          }
+        }
         if (innerExt === "dll") {
           codeInside = true;
           const pe = inspectPeLibrary(content);
@@ -159,9 +170,18 @@ export function validateTemplateFile(
         detected,
         checks,
         containsCode: codeInside,
+        needsReview: otherInside,
         entries: result.entries.filter((e) => !e.isDirectory).map((e) => ({ name: e.name, uncompressedSize: e.uncompressedSize })),
       },
     };
+  }
+
+  if (format.kind === "other-file") {
+    if (detected === "zip") {
+      return { ok: false, reason: `The file has a .${ext} extension but is actually a ZIP archive. Upload it as a .zip package.`, report: { format: ext, detected, checks } };
+    }
+    checks.push("no program, script or archive signature found; a moderator checks this file type");
+    return { ok: true, report: { format: ext, detected: detected === "unknown" ? "other" : detected, checks, needsReview: true } };
   }
 
   if (detected === "zip") {

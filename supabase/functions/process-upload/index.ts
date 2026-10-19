@@ -66,6 +66,7 @@ async function processFile(db: SupabaseClient, id: string, limits: Limits): Prom
       validation_status: result.ok ? "passed" : "failed",
       validation_report: result.ok ? result.report : { ...result.report, error: result.reason },
       contains_code: result.ok && !!result.report.containsCode,
+      needs_review: result.ok && !!result.report.needsReview,
       uploaded_at: now,
       processed_at: now,
     })

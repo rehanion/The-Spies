@@ -57,9 +57,14 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
         ) : (
           <EmptyState
             title="No templates match these filters"
-            action={<Link className="btn btn-secondary" href="/browse">Clear filters</Link>}
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Link className="btn btn-secondary" href="/browse">Clear filters</Link>
+                <Link className="btn btn-primary" href="/upload">Upload one</Link>
+              </div>
+            }
           >
-            Try a shorter search, another platform, or a different category.
+            Try a shorter search or another platform. Have something that fits? Be the first to share it.
           </EmptyState>
         )}
       </div>

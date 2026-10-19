@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { acceptsExtension } from "@shared/formats.ts";
 import { getViewer } from "@/lib/auth";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/request";
@@ -120,7 +121,7 @@ export async function updateSubmission(_prev: FormState, formData: FormData): Pr
       .eq("template_id", current.id)
       .eq("is_current", true);
     const allowed = (await getCatalog()).rules(parsed.data.platform_id)?.upload ?? [];
-    if ((files ?? []).some((f) => !allowed.includes(f.extension))) {
+    if ((files ?? []).some((f) => !acceptsExtension(allowed, f.extension))) {
       return {
         ok: false,
         message: "Some uploaded files are not valid for the new platform. Remove them first.",
@@ -156,7 +157,7 @@ export async function submitForReview(templateId: string): Promise<FormState> {
   const [{ data: after }, { data: settings }, { count: codeFiles }] = await Promise.all([
     supabase.from("templates").select("publication_status").eq("id", templateId).single(),
     supabase.from("site_settings").select("auto_publish").eq("id", 1).maybeSingle(),
-    supabase.from("template_files").select("id", { count: "exact", head: true }).eq("template_id", templateId).eq("is_current", true).eq("contains_code", true),
+    supabase.from("template_files").select("id", { count: "exact", head: true }).eq("template_id", templateId).eq("is_current", true).or("contains_code.eq.true,needs_review.eq.true"),
   ]);
   return {
     ok: true,

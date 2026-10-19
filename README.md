@@ -57,8 +57,12 @@ Manual scanning: [docs/MANUAL_SCANNING.md](docs/MANUAL_SCANNING.md).
 
 ## Platforms and categories
 
-Admins add and edit them under Admin > Platforms & categories, including which file types each platform accepts. Listings with plugin files (.dll, .jar) always wait for a moderator. A new file type needs a check in `supabase/functions/_shared/formats.ts` first.
+Admins add and edit them under Admin > Platforms & categories, including which file types each platform accepts. Programs and scripts are always refused. Listings with plugins (.dll, .jar) or file types SPIES cannot check always wait for a moderator. A new file type needs a check in `supabase/functions/_shared/formats.ts` first.
 
 ## License
 
 All rights reserved. See [LICENSE](LICENSE).
+
+## For AI assistants
+
+See [AI_HANDOFF.md](AI_HANDOFF.md).

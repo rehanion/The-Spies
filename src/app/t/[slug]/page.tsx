@@ -92,8 +92,8 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
           <Notice tone={t.publication_status === "rejected" || t.publication_status === "removed" ? "danger" : "warn"} title="Not public yet">
             Only you{staff && !isOwner ? " (as staff)" : ""} can see this page.{" "}
             {t.publication_status === "pending"
-              ? files.some((f) => f.contains_code)
-                ? "Because it includes a compiled plugin, a moderator checks it after the virus scan."
+              ? files.some((f) => f.contains_code || f.needs_review)
+                ? "Because it includes a plugin or a file type we cannot check, a moderator looks at it after the virus scan."
                 : "It goes live automatically once the virus scan has passed."
               : <>Status: <strong>{t.publication_status}</strong>.</>}
             {t.moderation_note ? <> Note: {t.moderation_note}</> : null}{" "}

@@ -157,3 +157,34 @@ describe("plugins and scripts", () => {
     expect(validateTemplateFile(strToU8("hello"), "x.pine", rules("tradingview"), L).ok).toBe(false);
   });
 });
+
+describe("other file types", () => {
+  it("accepts MotiveWave .tml templates", () => {
+    const r = validateTemplateFile(strToU8("<template name='x'/>"), "Scalp.tml", rules("motivewave"), L);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.report.needsReview).toBeFalsy();
+  });
+
+  it("accepts unknown types but marks them for a moderator", () => {
+    const r = validateTemplateFile(strToU8("settings=1"), "layout.qtw", rules("quantower"), L);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.report.needsReview).toBe(true);
+  });
+
+  it("still rejects programs, whatever the name", () => {
+    for (const name of ["setup.exe", "run.bat", "x.lnk", "a.msi", "d.iso", "m.xlsm", "s.ps1"]) {
+      expect(checkUploadExtension(rules("atas"), name).ok, name).toBe(false);
+    }
+    expect(validateTemplateFile(peImage({ exe: true }), "harmless.qtw", rules("quantower"), L).ok).toBe(false);
+    expect(validateTemplateFile(strToU8("#!/bin/sh\nrm -rf /"), "notes.cfg", rules("quantower"), L).ok).toBe(false);
+    expect(validateTemplateFile(zipSync({ "a.xml": strToU8("<a/>") }), "pack.qtw", rules("quantower"), L).ok).toBe(false);
+  });
+
+  it("marks ZIPs that hold unknown types and rejects programs inside", () => {
+    const ok = validateTemplateFile(zipSync({ "a.qtw": strToU8("x=1"), "readme.txt": strToU8("hi") }), "p.zip", rules("quantower"), L);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.report.needsReview).toBe(true);
+    expect(validateTemplateFile(zipSync({ "run.bat": strToU8("echo") }), "p.zip", rules("quantower"), L).ok).toBe(false);
+    expect(validateTemplateFile(zipSync({ "a.qtw": peImage({ exe: true }) }), "p.zip", rules("quantower"), L).ok).toBe(false);
+  });
+});

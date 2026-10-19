@@ -31,11 +31,11 @@ const c = (id: string, name: string, sort: number): CatalogCategory => ({ id, na
 
 export const FALLBACK_CATALOG: CatalogData = {
   platforms: [
-    p("motivewave", "MotiveWave", ["mwml", "zip", "jar"], ["mwml", "txt", "md"], 10),
-    p("sierra-chart", "Sierra Chart", ["cht", "stdycollct", "twconfig", "zip", "dll"], ["cht", "stdycollct", "twconfig", "txt", "md", "dll"], 20),
-    p("quantower", "Quantower", ["xml", "zip", "dll"], ["xml", "txt", "md", "dll"], 30),
-    p("atas", "ATAS", ["xml", "zip", "dll"], ["xml", "txt", "md", "dll"], 40),
-    p("tradingview", "TradingView", ["pine", "txt"], ["pine", "txt", "md"], 50),
+    p("motivewave", "MotiveWave", ["mwml", "tml", "zip", "jar", "txt", "other"], ["mwml", "tml", "txt", "md", "other"], 10),
+    p("sierra-chart", "Sierra Chart", ["cht", "stdycollct", "twconfig", "zip", "dll", "txt", "other"], ["cht", "stdycollct", "twconfig", "txt", "md", "dll", "other"], 20),
+    p("quantower", "Quantower", ["xml", "zip", "dll", "txt", "other"], ["xml", "txt", "md", "dll", "other"], 30),
+    p("atas", "ATAS", ["xml", "zip", "dll", "txt", "other"], ["xml", "txt", "md", "dll", "other"], 40),
+    p("tradingview", "TradingView", ["pine", "txt", "other"], ["pine", "txt", "md", "other"], 50),
   ],
   categories: [
     c("footprint", "Footprint", 10), c("tpo", "TPO", 15), c("volume-profile", "Volume Profile", 20), c("dom", "DOM", 30),

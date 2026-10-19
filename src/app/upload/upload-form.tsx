@@ -8,7 +8,7 @@ import { Turnstile } from "@/components/turnstile";
 import { LICENSES, type CatalogPlatform } from "@/lib/catalog";
 import { useCatalog } from "@/components/catalog-provider";
 import { formatBytes } from "@/lib/format";
-import { extensionOf } from "@shared/formats.ts";
+import { OTHER_FORMAT, acceptsExtension, extensionOf } from "@shared/formats.ts";
 
 type Step = { label: string; state: "waiting" | "working" | "done" | "error"; progress?: number; message?: string };
 
@@ -16,7 +16,7 @@ type Step = { label: string; state: "waiting" | "working" | "done" | "error"; pr
 function guessPlatform(files: File[], platforms: CatalogPlatform[]): string | null {
   for (const f of files) {
     const ext = extensionOf(f.name);
-    const matches = platforms.filter((x) => x.upload_formats.includes(ext) && ext !== "zip");
+    const matches = platforms.filter((x) => x.upload_formats.includes(ext) && ext !== "zip" && ext !== "txt" && ext !== OTHER_FORMAT);
     if (matches.length === 1) return matches[0].id;
   }
   return null;
@@ -81,7 +81,7 @@ export function UploadForm({
     if (!shots.length) return "Add at least one screenshot so people can see what it looks like.";
     for (const f of files) {
       const ext = extensionOf(f.name);
-      if (!accepted.includes(ext)) return `${f.name}: .${ext || "?"} files are not accepted${platform ? ` for ${catalog.platformName(platform)}` : ""}.`;
+      if (!acceptsExtension(accepted, ext)) return `${f.name}: .${ext || "?"} files are not accepted${platform ? ` for ${catalog.platformName(platform)}` : ""}.`;
       if (f.size > maxFileBytes) return `${f.name} is larger than ${formatBytes(maxFileBytes)}.`;
     }
     for (const s of shots) {
@@ -178,7 +178,7 @@ export function UploadForm({
       <div className="space-y-6">
         <section aria-labelledby="files-h" className="space-y-3">
           <h2 id="files-h" className="text-base font-semibold text-fg">1. Template files</h2>
-          <input ref={fileInput} type="file" multiple className="sr-only" aria-label="Choose template files" accept={accepted.map((e) => "." + e).join(",")} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+          <input ref={fileInput} type="file" multiple className="sr-only" aria-label="Choose template files" accept={accepted.includes(OTHER_FORMAT) ? undefined : accepted.map((e) => "." + e).join(",")} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           <button
             type="button"
             disabled={busy}
@@ -190,7 +190,8 @@ export function UploadForm({
             <span aria-hidden="true" className="text-3xl">⇪</span>
             <span className="font-medium text-fg">Drag and drop files, or click to choose</span>
             <span className="text-xs text-fg-subtle">
-              {accepted.map((e) => "." + e).join(", ")} · up to {formatBytes(maxFileBytes)} each · max {maxFiles}
+              {accepted.filter((e) => e !== OTHER_FORMAT).map((e) => "." + e).join(", ")}
+              {accepted.includes(OTHER_FORMAT) ? " and most other files (no programs or scripts)" : ""} · up to {formatBytes(maxFileBytes)} each · max {maxFiles}
             </span>
           </button>
           {files.length ? (
@@ -207,7 +208,7 @@ export function UploadForm({
         </section>
 
         <section aria-labelledby="shots-h" className="space-y-3">
-          <h2 id="shots-h" className="text-base font-semibold text-fg">2. Screenshots</h2>
+          <h2 id="shots-h" className="text-base font-semibold text-fg">2. Screenshots <span className="text-sm font-normal text-fg-subtle">(at least one)</span></h2>
           <input ref={shotInput} type="file" multiple className="sr-only" aria-label="Choose screenshots" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" onChange={(e) => { addShots(e.target.files); e.target.value = ""; }} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {shotPreviews.map((s, i) => (
@@ -261,7 +262,7 @@ export function UploadForm({
             </div>
           </div>
           <div>
-            <label htmlFor="description" className="label">Description</label>
+            <label htmlFor="description" className="label">Description <span className="font-normal text-fg-subtle">(optional)</span></label>
             <textarea id="description" name="description" rows={5} maxLength={10000} className="input h-auto py-2" placeholder="What does it show? Which markets and timeframes is it for? How do you use it?" />
           </div>
           <div>

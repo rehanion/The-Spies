@@ -36,18 +36,27 @@ export default async function HomePage() {
       {!viewer ? (
         <section className="mt-4 flex flex-col gap-4 rounded-2xl bg-surface-2 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-fg">Share and discover trading layouts</h1>
+            <h1 className="text-lg font-semibold text-fg">Share your setup. Help another trader.</h1>
             <p className="mt-1 text-sm text-fg-muted">
-              Free templates for MotiveWave, Sierra Chart, Quantower, ATAS and TradingView. Every file is virus scanned before it goes live.
+              Free templates for MotiveWave, Sierra Chart, Quantower, ATAS and TradingView. Upload yours in a minute. Every file is virus scanned before it goes live.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2 whitespace-nowrap">
             <Link href="/signup" className="btn btn-primary rounded-full px-5">Join free</Link>
             <Link href="/browse" className="btn btn-secondary rounded-full px-5">Explore</Link>
           </div>
         </section>
       ) : (
-        <h1 className="sr-only">SPIES home</h1>
+        <>
+          <h1 className="sr-only">SPIES home</h1>
+          <section className="mt-4 flex flex-col gap-3 rounded-2xl border border-accent/30 bg-accent/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-semibold text-fg">Got a layout that works for you?</p>
+              <p className="mt-1 text-sm text-fg-muted">Share it with the community. Your template could be someone&apos;s next edge.</p>
+            </div>
+            <Link href="/upload" className="btn btn-primary shrink-0 whitespace-nowrap rounded-full px-5">Upload a template</Link>
+          </section>
+        </>
       )}
 
       {hasDemo ? (
@@ -67,7 +76,7 @@ export default async function HomePage() {
       {empty ? (
         <div className="py-10">
           <EmptyState title="Nothing here yet" action={<Link href="/upload" className="btn btn-primary rounded-full px-5">Upload the first template</Link>}>
-            Templates appear here as soon as they pass the automatic checks.
+            Be the first to share a template. It goes live as soon as it passes the automatic checks.
           </EmptyState>
         </div>
       ) : (
