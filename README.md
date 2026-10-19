@@ -228,8 +228,8 @@ are read from the database, never from user-editable JWT metadata.
 - **Automatic scanning.** `.github/workflows/scan.yml` runs every 5 minutes on GitHub's free runners (it stops at once when nothing is waiting): it installs
   ClamAV, updates signatures, signs in as a dedicated moderator account and scans every pending file with
   `scripts/admin-scan.mjs`. Clean files publish their listing automatically; infected files are flagged and
-  never downloadable. Secrets: `SPIES_SUPABASE_URL`, `SPIES_SUPABASE_PUBLISHABLE_KEY`, `SPIES_SCANNER_EMAIL`,
-  `SPIES_SCANNER_PASSWORD` (a moderator account, not the service-role key).
+  never downloadable. It needs only the `SUPABASE_ACCESS_TOKEN` secret and signs in as the scanner moderator
+  account with a one-time login, so the scanning step never holds a key that bypasses Row Level Security.
 - **Keep-alive.** `.github/workflows/keepalive.yml` pings the database daily so the free Supabase project is
   never paused, and re-enables both workflows so GitHub does not switch them off after 60 quiet days.
 - **Admin → Overview → Publishing** switches between auto-publish (default) and manual approval.
