@@ -20,11 +20,15 @@ function Shelf({ id, title, href, children }: { id: string; title: string; href?
 }
 
 export default async function HomePage() {
-  const viewer = await getViewer();
-  const [trending, fresh, following] = await Promise.all([
+  // The public shelves do not depend on the viewer, so they start at once
+  // instead of waiting for the session check and profile lookup.
+  const [trending, fresh, { viewer, following }] = await Promise.all([
     searchTemplates({ sort: "trending", pageSize: 8 }),
     searchTemplates({ sort: "recent", pageSize: 8 }),
-    viewer ? searchTemplates({ following: true, sort: "recent", pageSize: 4 }) : null,
+    getViewer().then(async (viewer) => ({
+      viewer,
+      following: viewer ? await searchTemplates({ following: true, sort: "recent", pageSize: 4 }) : null,
+    })),
   ]);
   const hasDemo = [...trending.items, ...fresh.items].some((i) => i.is_demo);
   const empty = trending.items.length === 0;
@@ -69,7 +73,7 @@ export default async function HomePage() {
 
       {following && following.items.length ? (
         <Shelf id="following-h" title="From creators you follow" href="/feed">
-          <TemplateGrid items={following.items} />
+          <TemplateGrid items={following.items} eager={4} />
         </Shelf>
       ) : null}
 
@@ -82,7 +86,7 @@ export default async function HomePage() {
       ) : (
         <>
           <Shelf id="trending-h" title="Trending" href="/browse?sort=trending">
-            <TemplateGrid items={trending.items} />
+            <TemplateGrid items={trending.items} eager={following?.items.length ? 0 : 4} />
           </Shelf>
           <Shelf id="new-h" title="New uploads" href="/browse?sort=recent">
             <TemplateGrid items={fresh.items} />

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { formatBytes } from "@/lib/format";
 import { acceptsExtension } from "@shared/formats.ts";
-import { ScanBadge, ValidationBadge } from "@/components/badges";
+import { ScanBadge, ValidationBadge } from "@/components/status-badges";
 import { completeUpload, deleteUpload, putWithProgress, reserveUpload } from "./direct-upload";
 
 export interface ManagedFile {
@@ -18,6 +18,8 @@ export interface ManagedFile {
   validation_report: { error?: string; checks?: string[]; entries?: { name: string }[] } | null;
   scan_status: "pending" | "clean" | "flagged" | "error";
   scanned_at: string | null;
+  /** Set when the same file is already in another listing. */
+  duplicate?: { title: string | null; slug: string | null; sameCreator: boolean } | null;
 }
 
 type Job = { name: string; progress: number; phase: "uploading" | "processing" | "done" | "error"; message?: string };
@@ -122,6 +124,18 @@ export function FilesManager({
             </div>
             {f.validation_status === "failed" && f.validation_report?.error ? (
               <p className="mt-2 text-xs text-danger">{f.validation_report.error}</p>
+            ) : null}
+            {f.duplicate ? (
+              <p className="mt-2 text-xs text-warn">
+                {f.duplicate.sameCreator ? "You already uploaded this exact file" : "This exact file is already on SPIES"}
+                {f.duplicate.slug ? (
+                  <>
+                    {" in "}
+                    <a className="underline" href={`/t/${f.duplicate.slug}`}>{f.duplicate.title}</a>
+                  </>
+                ) : null}
+                . A moderator checks it before this listing goes live.
+              </p>
             ) : null}
             {f.sha256 ? <p className="mt-1 break-all font-mono text-[11px] text-fg-subtle">SHA-256 {f.sha256}</p> : null}
             <div className="mt-2 flex flex-wrap gap-2">

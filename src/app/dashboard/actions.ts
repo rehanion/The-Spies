@@ -157,7 +157,7 @@ export async function submitForReview(templateId: string): Promise<FormState> {
   const [{ data: after }, { data: settings }, { count: codeFiles }] = await Promise.all([
     supabase.from("templates").select("publication_status").eq("id", templateId).single(),
     supabase.from("site_settings").select("auto_publish").eq("id", 1).maybeSingle(),
-    supabase.from("template_files").select("id", { count: "exact", head: true }).eq("template_id", templateId).eq("is_current", true).or("contains_code.eq.true,needs_review.eq.true"),
+    supabase.from("template_files").select("id", { count: "exact", head: true }).eq("template_id", templateId).eq("is_current", true).or("contains_code.eq.true,needs_review.eq.true,duplicate_of.not.is.null"),
   ]);
   return {
     ok: true,

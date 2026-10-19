@@ -6,6 +6,7 @@ import { getViewer } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { storage } from "@/lib/storage";
+import { signedInRecently } from "@/lib/reauth";
 
 export type AccountState = { ok: boolean; message: string } | null;
 
@@ -57,6 +58,16 @@ export async function changeEmail(_prev: AccountState, formData: FormData): Prom
   const email = emailSchema.safeParse(String(formData.get("email") ?? "").trim());
   if (!email.success) return { ok: false, message: "Enter a valid email address." };
   const supabase = await createClient();
+  // Email confirmation is off, so Supabase applies the new address at once.
+  // Like a password change, it needs a recent sign in, so a session left open
+  // on a shared computer cannot move the account to another address.
+  const { data } = await supabase.auth.getClaims();
+  if (!signedInRecently(data?.claims as Record<string, unknown> | undefined)) {
+    return {
+      ok: false,
+      message: "For your security, sign in again before you change your email. Then change it within 10 minutes.",
+    };
+  }
   const { error } = await supabase.auth.updateUser({ email: email.data });
   if (error) return { ok: false, message: "The email change could not be started. Please try again later." };
   return { ok: true, message: "Check both your old and new inboxes to confirm the change." };

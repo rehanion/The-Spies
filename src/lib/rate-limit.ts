@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const RATE_LIMITS = {
   createSubmission: { limit: 10, windowSeconds: 3600 },
   uploadInit: { limit: 60, windowSeconds: 3600 },
+  // Each call runs the process-upload Edge Function (free plan invocation quota).
+  process: { limit: 120, windowSeconds: 3600 },
   download: { limit: 60, windowSeconds: 600 },
   report: { limit: 5, windowSeconds: 3600 },
   review: { limit: 20, windowSeconds: 3600 },

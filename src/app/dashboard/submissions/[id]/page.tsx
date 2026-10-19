@@ -31,7 +31,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
   const [{ data: files }, { data: shots }, { data: scans }] = await Promise.all([
     supabase
       .from("template_files")
-      .select("id, original_filename, extension, size_bytes, declared_size_bytes, sha256, validation_status, validation_report, scan_status, scanned_at")
+      .select("id, original_filename, extension, size_bytes, declared_size_bytes, sha256, validation_status, validation_report, scan_status, scanned_at, duplicate_of")
       .eq("template_id", t.id)
       .eq("is_current", true)
       .order("created_at"),
@@ -49,7 +49,18 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
   ]);
 
   const l = limits();
-  const fileList = (files ?? []) as ManagedFile[];
+  const duplicates = new Map(
+    await Promise.all(
+      (files ?? [])
+        .filter((f) => f.duplicate_of)
+        .map(async (f) => {
+          const { data } = await supabase.rpc("file_duplicate_info", { p_file_id: f.id });
+          const d = data?.[0];
+          return [f.id, d ? { title: d.template_title, slug: d.template_slug, sameCreator: d.same_creator } : null] as const;
+        }),
+    ),
+  );
+  const fileList = (files ?? []).map((f) => ({ ...f, duplicate: duplicates.get(f.id) ?? null })) as ManagedFile[];
   const shotList = (shots ?? []).map((s) => ({ ...s, thumbUrl: previewUrl(s.thumb_key) }));
   const readyShots = shotList.filter((s) => s.status === "ready").length;
   const passedFiles = fileList.filter((f) => f.validation_status === "passed").length;

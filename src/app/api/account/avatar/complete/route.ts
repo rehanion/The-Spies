@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getViewer } from "@/lib/auth";
 import { runProcessor } from "@/lib/processor";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const bodySchema = z.object({ key: z.string().max(200) });
 
@@ -14,6 +15,9 @@ export async function POST(request: NextRequest) {
   // The key must be one this user could have reserved; the processor checks it again.
   if (!parsed.success || !new RegExp(`^avatars/${viewer.userId}/[0-9a-f-]{36}\\.bin$`).test(parsed.data.key)) {
     return NextResponse.json({ message: "Invalid request." }, { status: 400 });
+  }
+  if (!(await consumeRateLimit("process", viewer.userId))) {
+    return NextResponse.json({ message: "Too many requests. Try again later." }, { status: 429 });
   }
   const result = await runProcessor({ kind: "avatar", userId: viewer.userId, key: parsed.data.key });
   if (result.data.status === "ready") {

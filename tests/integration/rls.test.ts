@@ -171,6 +171,40 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
   });
 
+  it("a file already on SPIES is flagged and its listing waits for a moderator", async () => {
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
+    const scan = (fileId: string, hash: string) =>
+      moderator.client.rpc("record_scan_result", {
+        p_file_id: fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: hash,
+      });
+    const status = async (id: string) => (await service().from("templates").select("publication_status").eq("id", id).single()).data?.publication_status;
+    const first = await pendingListing(creator.id);
+    const hash = sha();
+    await service().from("template_files").update({ size_bytes: 500, sha256: hash }).eq("id", first.fileId);
+    await creator.client.rpc("submit_template", { p_template_id: first.id });
+    await scan(first.fileId, hash);
+    expect(await status(first.id)).toBe("approved");
+
+    const copy = await pendingListing(other.id);
+    await service().from("template_files").update({ size_bytes: 500, sha256: hash }).eq("id", copy.fileId);
+    const row = (await service().from("template_files").select("duplicate_of").eq("id", copy.fileId).single()).data;
+    expect(row?.duplicate_of).toBe(first.fileId);
+    await other.client.rpc("submit_template", { p_template_id: copy.id });
+    await scan(copy.fileId, hash);
+    expect(await status(copy.id)).toBe("pending");
+
+    const info = (await other.client.rpc("file_duplicate_info", { p_file_id: copy.fileId })).data?.[0];
+    expect(info?.same_creator).toBe(false);
+    expect(info?.template_slug).toBeTruthy();
+    expect((await creator.client.rpc("file_duplicate_info", { p_file_id: copy.fileId })).data ?? []).toHaveLength(0);
+    expect((await anon().rpc("file_duplicate_info", { p_file_id: copy.fileId })).error).not.toBeNull();
+    // Readmes are never treated as duplicates.
+    const readme = await pendingListing(other.id);
+    await service().from("template_files").update({ extension: "txt", original_filename: "readme.txt" }).eq("id", readme.fileId);
+    await service().from("template_files").update({ size_bytes: 500, sha256: hash }).eq("id", readme.fileId);
+    expect((await service().from("template_files").select("duplicate_of").eq("id", readme.fileId).single()).data?.duplicate_of).toBeNull();
+  });
+
   it("auto-publish makes a listing public only after a clean scan of the stored hash", async () => {
     await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
     const l = await pendingListing(creator.id);
@@ -211,6 +245,33 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     }
     await other.client.from("follows").delete().eq("creator_id", creator.id);
     expect((await service().from("profiles").select("follower_count").eq("id", creator.id).single()).data!.follower_count).toBe(before);
+  });
+
+  it("search pages are consistent, counted, and skip suspended creators", async () => {
+    const page = (offset: number, limit: number, sort = "recent") =>
+      anon().rpc("search_templates", { p_sort: sort, p_limit: limit, p_offset: offset });
+    for (const sort of ["recent", "trending", "rating"]) {
+      const all = await page(0, 6, sort);
+      const [a, b] = await Promise.all([page(0, 3, sort), page(3, 3, sort)]);
+      expect(all.error).toBeNull();
+      expect([...a.data!, ...b.data!].map((r) => r.id), sort).toEqual(all.data!.map((r) => r.id));
+      const totals = new Set([...all.data!, ...a.data!, ...b.data!].map((r) => r.total_count));
+      expect(totals.size, sort).toBeLessThanOrEqual(1);
+    }
+    const { data: rows } = await page(0, 60);
+    if (rows?.length) {
+      const { data: creators } = await service()
+        .from("profiles")
+        .select("username, is_banned")
+        .in("username", [...new Set(rows.map((r) => r.creator_username))]);
+      expect(creators!.some((c) => c.is_banned)).toBe(false);
+      expect(rows.every((r) => !!r.creator_username)).toBe(true);
+      expect(Number(rows[0].total_count)).toBeGreaterThanOrEqual(rows.length);
+    }
+    // Past the end: no rows, no error.
+    const past = await page(100000, 5);
+    expect(past.error).toBeNull();
+    expect(past.data).toEqual([]);
   });
 
   it("comments: public listings only, own edits, staff moderation, counted", async () => {

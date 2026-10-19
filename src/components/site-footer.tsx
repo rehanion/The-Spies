@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { DISCORD_INVITE, OWNER_CONTACT } from "@/lib/links";
 
 export function SiteFooter() {
   return (
@@ -18,6 +19,8 @@ export function SiteFooter() {
           <ul className="space-y-1.5 text-fg-muted">
             <li><Link className="hover:text-fg" href="/browse">Browse templates</Link></li>
             <li><Link className="hover:text-fg" href="/upload">Upload a template</Link></li>
+            <li><a className="hover:text-fg" href={DISCORD_INVITE} target="_blank" rel="noopener noreferrer">Join our Discord</a></li>
+            <li><a className="hover:text-fg" href={OWNER_CONTACT} target="_blank" rel="noopener noreferrer">Contact the owner</a></li>
             <li><Link className="hover:text-fg" href="/rules">Acceptable use rules</Link></li>
           </ul>
         </div>

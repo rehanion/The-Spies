@@ -6,7 +6,7 @@ import { Avatar } from "@/components/site-header";
 import type { TemplateListItem } from "@/lib/data/templates";
 
 // Video-site style card: big thumbnail, then avatar, title, creator and stats.
-export function TemplateCard({ item }: { item: TemplateListItem }) {
+export function TemplateCard({ item, eager = false }: { item: TemplateListItem; eager?: boolean }) {
   const thumb = previewUrl(item.cover_thumb_key);
   return (
     <article className="group">
@@ -14,7 +14,7 @@ export function TemplateCard({ item }: { item: TemplateListItem }) {
         <div className="relative aspect-video overflow-hidden rounded-xl bg-surface-2 ring-1 ring-transparent transition-[box-shadow,transform] duration-200 group-hover:-translate-y-0.5 group-hover:shadow-lg group-hover:shadow-black/30 group-hover:ring-line-strong">
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]" />
+            <img src={thumb} alt="" width={640} height={360} loading={eager ? "eager" : "lazy"} decoding="async" className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]" />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-fg-subtle">No screenshot</div>
           )}
@@ -49,11 +49,12 @@ export function TemplateCard({ item }: { item: TemplateListItem }) {
   );
 }
 
-export function TemplateGrid({ items }: { items: TemplateListItem[] }) {
+/** `eager`: how many leading thumbnails load without waiting (the first row above the fold). */
+export function TemplateGrid({ items, eager = 0 }: { items: TemplateListItem[]; eager?: number }) {
   return (
     <div className="stagger grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {items.map((item) => (
-        <TemplateCard key={item.id} item={item} />
+      {items.map((item, i) => (
+        <TemplateCard key={item.id} item={item} eager={i < eager} />
       ))}
     </div>
   );

@@ -31,12 +31,10 @@ export async function generateMetadata({ params }: PageProps<"/u/[username]">): 
 }
 
 export default async function CreatorPage({ params, searchParams }: PageProps<"/u/[username]">) {
-  const profile = await getProfile((await params).username);
+  const [profile, viewer, sp] = await Promise.all([getProfile((await params).username), getViewer(), searchParams]);
   if (!profile || profile.is_banned) notFound();
-  const sp = await searchParams;
   const page = Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1;
   const sort = sp.sort === "popular" ? "views" : "recent";
-  const viewer = await getViewer();
   const supabase = await createClient();
   const [result, follow] = await Promise.all([
     searchTemplates({ creatorId: profile.id, sort, page, pageSize: 12 }),

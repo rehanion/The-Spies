@@ -31,6 +31,13 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
   ]);
   const creator = t.creator as unknown as { id: string; username: string; display_name: string; created_at: string; is_banned: boolean; role: string };
   const current = (files ?? []).filter((f) => f.is_current);
+  const duplicates = new Map(
+    await Promise.all(
+      current
+        .filter((f) => f.duplicate_of)
+        .map(async (f) => [f.id, (await supabase.rpc("file_duplicate_info", { p_file_id: f.id })).data?.[0] ?? null] as const),
+    ),
+  );
   const canApprove =
     current.length > 0 &&
     current.every((f) => f.validation_status === "passed" && f.scan_status === "clean" && f.scanned_sha256 === f.sha256) &&
@@ -92,6 +99,13 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
                     <dt className="text-fg-subtle">Uploaded</dt><dd>{formatDateTime(f.uploaded_at)}</dd>
                     <dt className="text-fg-subtle">Approved hash</dt><dd className="break-all font-mono">{f.approved_sha256 ?? "None"}</dd>
                   </dl>
+                  {duplicates.get(f.id) ? (
+                    <p className="mt-2 text-xs text-warn">
+                      Same file as{" "}
+                      <a className="underline" href={`/t/${duplicates.get(f.id)?.template_slug}`}>{duplicates.get(f.id)?.template_title}</a>
+                      {duplicates.get(f.id)?.same_creator ? " by the same creator" : " by another creator. Check who really made it before approving."}
+                    </p>
+                  ) : null}
                   {report?.error ? <p className="mt-2 text-xs text-danger">Validation: {report.error}</p> : null}
                   {report?.checks?.length ? (
                     <ul className="mt-2 list-inside list-disc text-xs text-fg-muted">{report.checks.map((c) => <li key={c}>{c}</li>)}</ul>

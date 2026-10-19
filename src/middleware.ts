@@ -7,6 +7,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 function buildCsp(nonce: string): string {
   const supabase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const isDev = process.env.NODE_ENV === "development";
@@ -31,6 +33,17 @@ export async function middleware(request: NextRequest) {
   const site = process.env.NEXT_PUBLIC_SITE_URL;
   if (site && !site.includes(".workers.dev") && request.nextUrl.hostname.endsWith(".workers.dev")) {
     return NextResponse.redirect(new URL(request.nextUrl.pathname + request.nextUrl.search, site), 301);
+  }
+
+  // Route handlers have no built in CSRF check (server actions do). Session
+  // cookies are SameSite=Lax, and this also refuses cross-site writes from
+  // browsers that send Origin or Sec-Fetch-Site.
+  if (UNSAFE_METHODS.has(request.method) && /^\/(api|auth)\//.test(request.nextUrl.pathname)) {
+    const origin = request.headers.get("origin");
+    const fetchSite = request.headers.get("sec-fetch-site");
+    if ((origin && origin !== request.nextUrl.origin) || fetchSite === "cross-site") {
+      return new NextResponse("Forbidden", { status: 403, headers: { "cache-control": "no-store" } });
+    }
   }
 
   const bytes = crypto.getRandomValues(new Uint8Array(16));

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getViewer } from "@/lib/auth";
 import { runProcessor } from "@/lib/processor";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 
 const bodySchema = z.object({ kind: z.enum(["file", "screenshot"]) });
@@ -17,6 +18,10 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/uploads
   if (viewer.profile.is_banned) return NextResponse.json({ error: "suspended", message: "Your account is suspended." }, { status: 403 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+
+  if (!(await consumeRateLimit("process", viewer.userId))) {
+    return NextResponse.json({ status: "error", message: "Too many requests. Wait a little and try again." }, { status: 429 });
+  }
 
   const supabase = await createClient();
   const table = parsed.data.kind === "file" ? "template_files" : "template_screenshots";

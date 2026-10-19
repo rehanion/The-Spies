@@ -3,6 +3,7 @@ import { contentDisposition, sanitizeFilename } from "@shared/filename.ts";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { computeDownloadState, type FileGateInput } from "@/lib/download-state";
 import { slugify } from "@/lib/slug";
+import { UploadError, precheckUpload } from "@/lib/uploads";
 
 describe("sanitizeFilename", () => {
   it("strips paths, control and bidi characters", () => {
@@ -25,7 +26,11 @@ describe("sanitizeFilename", () => {
 describe("safeNextPath", () => {
   it("allows same-origin paths only", () => {
     expect(safeNextPath("/t/abc?x=1")).toBe("/t/abc?x=1");
-    for (const bad of ["https://evil.test", "//evil.test", "/\\evil.test", "javascript:alert(1)", "/a\nb", "", null, 5]) {
+    expect(safeNextPath("/a/../t/abc")).toBe("/t/abc");
+    for (const bad of [
+      "https://evil.test", "//evil.test", "/\\evil.test", "javascript:alert(1)", "/a\nb", "", null, 5,
+      "/.//evil.test", "/..//evil.test", "/a/..//evil.test", "/%2e//evil.test", "/%2e%2e//evil.test",
+    ]) {
       expect(safeNextPath(bad, "/fallback")).toBe("/fallback");
     }
   });
@@ -48,5 +53,18 @@ describe("slugify", () => {
   it("produces url-safe slugs", () => {
     expect(slugify("ES Footprint — Order Flow!!")).toMatch(/^[a-z0-9-]+$/);
     expect(slugify("   ")).toBeTruthy();
+  });
+});
+
+describe("precheckUpload", () => {
+  const rules = { upload: ["xml", "zip", "other"], zipInner: ["xml", "other"] };
+  it("refuses file types that can run code but have no magic bytes", () => {
+    for (const name of ["notes.one", "macro.accdb", "page.mhtml", "a.settingcontent-ms", "x.sct", "doc.rtf", "q.iqy"]) {
+      expect(() => precheckUpload({ kind: "file", filename: name, size: 10 }, rules), name).toThrow(UploadError);
+    }
+  });
+  it("still accepts template and other plain files", () => {
+    expect(precheckUpload({ kind: "file", filename: "layout.xml", size: 10 }, rules).extension).toBe("xml");
+    expect(precheckUpload({ kind: "file", filename: "readme.csv", size: 10 }, rules).extension).toBe("csv");
   });
 });

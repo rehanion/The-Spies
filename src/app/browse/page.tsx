@@ -49,7 +49,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
       <div className="mt-6">
         {result.items.length ? (
           <>
-            <TemplateGrid items={result.items} />
+            <TemplateGrid items={result.items} eager={4} />
             <Pagination page={result.page} pageCount={result.pageCount} makeHref={makeHref} />
           </>
         ) : result.page > 1 && result.total > 0 ? (

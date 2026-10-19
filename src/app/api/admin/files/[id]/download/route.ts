@@ -4,6 +4,7 @@ import { getViewer, isStaff } from "@/lib/auth";
 import { storage } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeFilename } from "@shared/filename.ts";
 
 // Staff-only retrieval of the exact quarantined object for manual scanning.
 // The role is checked in the database (is_staff), not from the UI.
@@ -31,6 +32,6 @@ export async function GET(_request: NextRequest, ctx: RouteContext<"/api/admin/f
     p_details: { actor: viewer!.userId, sha256: file.sha256 },
   });
   // Name the download after the hash so the admin scans exactly this object.
-  const url = await storage.createDownloadUrl("quarantine", file.storage_key, 120, `${file.sha256?.slice(0, 12)}-${file.original_filename}`);
+  const url = await storage.createDownloadUrl("quarantine", file.storage_key, 120, sanitizeFilename(`${file.sha256?.slice(0, 12)}-${file.original_filename}`) ?? `${file.sha256?.slice(0, 12)}.bin`);
   return NextResponse.redirect(url, { status: 303, headers: { "cache-control": "no-store" } });
 }

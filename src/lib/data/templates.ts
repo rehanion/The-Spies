@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 import { SORTS, type SortKey } from "@/lib/catalog";
@@ -42,7 +43,9 @@ export async function searchTemplates(params: SearchParams) {
   return { items, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) };
 }
 
-export async function getTemplateBySlug(slug: string) {
+// Wrapped in cache() below: generateMetadata and the page both ask for the
+// same listing, and this way one request runs its four queries once.
+async function loadTemplateBySlug(slug: string) {
   if (!/^[a-z0-9-]{1,96}$/.test(slug)) return null;
   const supabase = await createClient();
   const { data: template } = await supabase
@@ -63,7 +66,7 @@ export async function getTemplateBySlug(slug: string) {
     supabase
       .from("template_files")
       .select(
-        "id, original_filename, extension, size_bytes, declared_size_bytes, sha256, detected_format, validation_status, validation_report, scan_status, scanned_at, scanner_name, scanner_version, signature_version, scanned_sha256, approved_sha256, is_current, contains_code, needs_review, created_at",
+        "id, original_filename, extension, size_bytes, declared_size_bytes, sha256, detected_format, validation_status, validation_report, scan_status, scanned_at, scanner_name, scanner_version, signature_version, scanned_sha256, approved_sha256, is_current, contains_code, needs_review, duplicate_of, created_at",
       )
       .eq("template_id", template.id)
       .eq("is_current", true)
@@ -77,6 +80,8 @@ export async function getTemplateBySlug(slug: string) {
   ]);
   return { template, screenshots: screenshots ?? [], files: files ?? [], reviews: reviews ?? [] };
 }
+
+export const getTemplateBySlug = cache(loadTemplateBySlug);
 
 export type TemplateDetail = NonNullable<Awaited<ReturnType<typeof getTemplateBySlug>>>;
 
