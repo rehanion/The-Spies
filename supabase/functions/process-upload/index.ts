@@ -92,21 +92,29 @@ async function processFile(db: SupabaseClient, id: string, limits: Limits): Prom
 
 // Starts the ClamAV workflow right away instead of waiting for its timer.
 // Optional: needs SCAN_DISPATCH_TOKEN (a GitHub token that can only run
-// Actions on this repository) and SCAN_REPOSITORY. Runs after the response.
-function startScan() {
+// Actions on this repository) and SCAN_REPOSITORY. Resolves to GitHub's HTTP
+// status, or null when instant scans are off or GitHub cannot be reached.
+async function dispatchScan(): Promise<number | null> {
   const token = Deno.env.get("SCAN_DISPATCH_TOKEN");
   const repo = Deno.env.get("SCAN_REPOSITORY");
-  if (!token || !repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return;
-  const run = fetch(`https://api.github.com/repos/${repo}/actions/workflows/scan.yml/dispatches`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "user-agent": "spies" },
-    body: JSON.stringify({ ref: "main" }),
-  })
-    .then((res) => {
-      if (!res.ok) console.error("scan dispatch failed", res.status);
-    })
-    .catch((err) => console.error("scan dispatch failed", err instanceof Error ? err.message : err));
-  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(run);
+  if (!token || !repo || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return null;
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/scan.yml/dispatches`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "user-agent": "spies" },
+      body: JSON.stringify({ ref: "main" }),
+    });
+    if (!res.ok) console.error("scan dispatch failed", res.status);
+    return res.status;
+  } catch (err) {
+    console.error("scan dispatch failed", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** Runs dispatchScan after the response is sent. */
+function startScan() {
+  (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(dispatchScan());
 }
 
 async function processScreenshotRow(db: SupabaseClient, id: string, limits: Limits): Promise<Response> {
@@ -246,6 +254,8 @@ Deno.serve(async (req) => {
   const limits = readLimits(Deno.env.toObject());
 
   try {
+    // Deploy check: proves the scan token works from here (GitHub answers 204).
+    if (body.kind === "scan-check") return json({ dispatch: await dispatchScan() });
     if (body.kind === "file" && body.id && UUID.test(body.id)) return await processFile(db, body.id, limits);
     if (body.kind === "screenshot" && body.id && UUID.test(body.id)) return await processScreenshotRow(db, body.id, limits);
     if (body.kind === "avatar" && body.userId && UUID.test(body.userId) && body.key) {

@@ -34,7 +34,7 @@ async function scanPendingFiles(page: Page) {
       encoding: "utf8",
       env: { ...process.env, SPIES_ADMIN_EMAIL: scanner.email, SPIES_ADMIN_PASSWORD: PASSWORD },
     });
-    expect(r.stdout, r.stderr).toContain(`clean sha256=${sha256(xml)}`);
+    expect(r.stdout, r.stderr).toContain(`✓ ${fileId}: clean`);
     return;
   }
   await login(page, scanner.email, "/admin/queue");
@@ -85,9 +85,10 @@ test("creator publishes with the one-page upload and it waits for the virus scan
   await page.getByRole("link", { name: "Upload a template" }).first().click();
   await page.waitForURL("**/upload");
   await page.getByLabel("Choose template files").setInputFiles({ name: "ES order flow.xml", mimeType: "text/xml", buffer: xml });
-  // Platform and title are filled in from the file.
-  await expect(page.getByLabel("Platform", { exact: true })).toHaveValue("quantower");
+  // The title comes from the file name. .xml fits Quantower and ATAS, so the creator picks the platform.
   await expect(page.getByLabel("Title")).toHaveValue("ES order flow");
+  await expect(page.getByLabel("Platform", { exact: true })).toHaveValue("");
+  await page.getByLabel("Platform", { exact: true }).selectOption("quantower");
   await page.getByLabel("Title").fill(title);
   await page.getByLabel("Choose screenshots").setInputFiles({ name: "shot.png", mimeType: "image/png", buffer: await pngBytes() });
   await page.getByLabel("Category").selectOption({ index: 1 });

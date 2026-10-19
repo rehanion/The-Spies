@@ -332,6 +332,18 @@ async function probe() {
   const text = (await res.text()).slice(0, 200);
   console.log(`::notice::Upload processor: HTTP ${res.status} ${text}`);
   if (res.status !== 400) throw new Error(`Upload processor check failed (HTTP ${res.status})`);
+
+  // Instant scans: the function starts scan.yml with its token (204 means it worked).
+  const scan = await fetch(`${need("NEXT_PUBLIC_SUPABASE_URL")}/functions/v1/process-upload`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-processor-secret": need("PROCESSOR_SECRET") },
+    body: JSON.stringify({ kind: "scan-check" }),
+  });
+  const { dispatch } = await scan.json().catch(() => ({}));
+  if (dispatch === undefined) throw new Error(`Instant scan check failed (HTTP ${scan.status})`);
+  if (dispatch === null) console.log("::notice::Instant scans: off (no SCAN_DISPATCH_TOKEN)");
+  else if (dispatch === 204) console.log("::notice::Instant scans: working");
+  else throw new Error(`Instant scans: GitHub refused the SCAN_DISPATCH_TOKEN (HTTP ${dispatch}). It needs Actions: Read and write on this repository.`);
 }
 
 const steps = {
