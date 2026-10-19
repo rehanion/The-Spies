@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { cleanupStaleUploads, moderate, recordScan, resolveReport, setUserBanned, setUserRole, type AdminState } from "@/app/admin/actions";
+import { cleanupStaleUploads, moderate, recordScan, resolveReport, setUserBanned, setUserRole, type AdminState, setAutoPublish } from "@/app/admin/actions";
 
 function Result({ state }: { state: AdminState }) {
   if (!state) return null;
@@ -142,6 +142,36 @@ export function CleanupButton() {
       <button type="button" className="btn btn-secondary" disabled={pending} onClick={() => start(async () => setMsg(await cleanupStaleUploads()))}>
         Clean up abandoned uploads
       </button>
+      <Result state={msg} />
+    </div>
+  );
+}
+
+export function AutoPublishToggle({ enabled, canEdit }: { enabled: boolean; canEdit: boolean }) {
+  const [pending, start] = useTransition();
+  const [on, setOn] = useState(enabled);
+  const [msg, setMsg] = useState<AdminState>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        disabled={pending || !canEdit}
+        className={`btn ${on ? "btn-primary" : "btn-secondary"}`}
+        onClick={() =>
+          start(async () => {
+            const res = await setAutoPublish(!on);
+            if (res?.ok) setOn(!on);
+            setMsg(res);
+          })
+        }
+      >
+        Auto-publish: {on ? "On" : "Off"}
+      </button>
+      <span className="text-sm text-fg-muted">
+        {on ? "Listings go live once every file passed validation and a clean virus scan." : "Every listing waits for a moderator to approve it."}
+      </span>
       <Result state={msg} />
     </div>
   );

@@ -74,3 +74,45 @@ export async function deleteReview(reviewId: string, slug: string): Promise<Acti
   revalidatePath(`/t/${slug}`);
   return { ok: true, message: "Review deleted." };
 }
+
+const commentSchema = z.object({
+  templateId: uuid,
+  slug: slugSchema,
+  parentId: z.union([z.literal(""), uuid]).transform((v) => v || null),
+  body: z.string().trim().min(1, "Write something first.").max(2000, "Comments can be at most 2000 characters."),
+});
+
+export async function addComment(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const viewer = await getViewer();
+  if (!viewer?.profile) return { ok: false, message: "Sign in to comment." };
+  if (viewer.profile.is_banned) return { ok: false, message: "Your account is suspended." };
+  const parsed = commentSchema.safeParse({
+    templateId: formData.get("templateId"),
+    slug: formData.get("slug"),
+    parentId: formData.get("parentId") ?? "",
+    body: formData.get("body") ?? "",
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Invalid comment." };
+  if (!(await consumeRateLimit("comment", viewer.userId))) return { ok: false, message: "You are commenting too quickly. Try again later." };
+  const { templateId, slug, parentId, body } = parsed.data;
+  const supabase = await createClient();
+  const { error } = await supabase.from("comments").insert({ template_id: templateId, author_id: viewer.userId, parent_id: parentId, body });
+  if (error) {
+    if (error.message.includes("too quickly")) return { ok: false, message: "You are commenting too quickly. Please wait a while." };
+    return { ok: false, message: "Your comment could not be posted." };
+  }
+  revalidatePath(`/t/${slug}`);
+  return { ok: true, message: "Comment posted." };
+}
+
+export async function deleteComment(commentId: string, slug: string): Promise<ActionState> {
+  const viewer = await getViewer();
+  if (!viewer) return { ok: false, message: "Sign in first." };
+  if (!uuid.safeParse(commentId).success || !slugSchema.safeParse(slug).success) return { ok: false, message: "Invalid request." };
+  const supabase = await createClient();
+  // RLS allows deleting your own comments; staff can delete any.
+  const { error, count } = await supabase.from("comments").delete({ count: "exact" }).eq("id", commentId);
+  if (error || !count) return { ok: false, message: "The comment could not be deleted." };
+  revalidatePath(`/t/${slug}`);
+  return { ok: true, message: "Comment deleted." };
+}

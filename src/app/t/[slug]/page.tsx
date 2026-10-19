@@ -1,18 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getTemplateBySlug } from "@/lib/data/templates";
+import { after } from "next/server";
+import { getComments, getTemplateBySlug, searchTemplates } from "@/lib/data/templates";
 import { getViewer, isStaff } from "@/lib/auth";
 import { previewUrl } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { formatBytes, formatCount, formatDate, formatDateTime } from "@/lib/format";
+import { formatBytes, formatDate, formatDateTime, plural, timeAgo } from "@/lib/format";
+import { actorHash } from "@/lib/request";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { LICENSES, platformLabel } from "@/lib/catalog";
 import { computeDownloadState, DOWNLOAD_STATE_MESSAGES } from "@/lib/download-state";
 import { Gallery, type GalleryImage } from "@/components/gallery";
 import { Avatar } from "@/components/site-header";
 import { CategoryBadge, DemoBadge, PlatformBadge, PublicationBadge, ScanBadge } from "@/components/badges";
 import { Notice } from "@/components/empty-state";
+import { FollowButton } from "@/components/follow-button";
 import { DeleteReviewButton, FavoriteButton, ReviewForm } from "./interactive";
+import { Comments, type CommentView } from "./comments";
 
 export async function generateMetadata({ params }: PageProps<"/t/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -32,12 +37,44 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
   const staff = isStaff(viewer);
   const approved = t.publication_status === "approved";
 
-  let isFavorite = false;
-  if (viewer) {
-    const supabase = await createClient();
-    const { data } = await supabase.from("favorites").select("template_id").eq("template_id", t.id).eq("user_id", viewer.userId).maybeSingle();
-    isFavorite = !!data;
+  const supabase = await createClient();
+  const [favRow, followRow, creatorStats, rawComments, related] = await Promise.all([
+    viewer ? supabase.from("favorites").select("template_id").eq("template_id", t.id).eq("user_id", viewer.userId).maybeSingle() : null,
+    viewer ? supabase.from("follows").select("creator_id").eq("creator_id", creator.id).eq("follower_id", viewer.userId).maybeSingle() : null,
+    supabase.from("profiles").select("follower_count").eq("id", creator.id).maybeSingle(),
+    getComments(t.id),
+    approved ? searchTemplates({ category: t.category_id, sort: "trending", pageSize: 9 }).catch(() => null) : null,
+  ]);
+  const isFavorite = !!favRow?.data;
+  const isFollowing = !!followRow?.data;
+  const followerCount = creatorStats.data?.follower_count ?? 0;
+
+  // Count a view once per visitor per day, after the page is sent.
+  if (approved && !isOwner) {
+    const hash = await actorHash(viewer?.userId ?? null);
+    after(async () => {
+      await createAdminClient().rpc("register_view", { p_template_id: t.id, p_actor_hash: hash });
+    });
   }
+
+  type RawComment = (typeof rawComments)[number];
+  const toView = (c: RawComment): CommentView => {
+    const a = c.author as unknown as { id: string; username: string; display_name: string; avatar_key: string | null };
+    return {
+      id: c.id,
+      parentId: c.parent_id,
+      body: c.body,
+      createdAgo: timeAgo(c.created_at),
+      edited: !!c.edited_at,
+      author: { id: a.id, username: a.username, displayName: a.display_name, avatarUrl: previewUrl(a.avatar_key), isCreator: a.id === creator.id },
+      replies: [],
+    };
+  };
+  const topLevel = rawComments.filter((c) => !c.parent_id).map(toView).reverse();
+  const byId = new Map(topLevel.map((c) => [c.id, c]));
+  for (const c of rawComments) if (c.parent_id) byId.get(c.parent_id)?.replies.push(toView(c));
+  const relatedItems = (related?.items ?? []).filter((r) => r.id !== t.id).slice(0, 8);
+  const downloadable = files.filter((f) => computeDownloadState(t.publication_status, f) === "ok");
 
   const images: GalleryImage[] = screenshots
     .filter((s) => s.status === "ready" && s.public_key && s.thumb_key)
@@ -47,47 +84,98 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
   const totalSize = files.reduce((n, f) => n + (f.size_bytes ?? f.declared_size_bytes), 0);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
       {!approved ? (
         <div className="mb-6">
-          <Notice tone={t.publication_status === "rejected" || t.publication_status === "removed" ? "danger" : "warn"} title="Not public">
-            Only you{staff && !isOwner ? " (as staff)" : ""} can see this page. Status: <strong>{t.publication_status}</strong>.
-            {t.moderation_note ? <> Moderator note: {t.moderation_note}</> : null}{" "}
-            {isOwner ? <Link className="underline" href={`/dashboard/submissions/${t.id}`}>Manage this submission</Link> : null}
+          <Notice tone={t.publication_status === "rejected" || t.publication_status === "removed" ? "danger" : "warn"} title="Not public yet">
+            Only you{staff && !isOwner ? " (as staff)" : ""} can see this page.{" "}
+            {t.publication_status === "pending"
+              ? "It goes live automatically once the virus scan has passed."
+              : <>Status: <strong>{t.publication_status}</strong>.</>}
+            {t.moderation_note ? <> Note: {t.moderation_note}</> : null}{" "}
+            {isOwner ? <Link className="underline" href={`/dashboard/submissions/${t.id}`}>Manage this upload</Link> : null}
           </Notice>
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <PlatformBadge platformId={t.platform_id} />
-        <CategoryBadge categoryId={t.category_id} />
-        {t.is_demo ? <DemoBadge /> : null}
-        {!approved ? <PublicationBadge status={t.publication_status} /> : null}
-      </div>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{t.title}</h1>
-      {t.summary ? <p className="mt-2 max-w-3xl text-fg-muted">{t.summary}</p> : null}
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-8">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0 space-y-5">
           <Gallery images={images} title={t.title} coverId={t.cover_screenshot_id} />
 
-          <section aria-labelledby="desc-h">
-            <h2 id="desc-h" className="mb-2 text-base font-semibold text-fg">Description</h2>
-            <div className="prose-plain">{t.description || "No description provided."}</div>
-          </section>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-fg sm:text-2xl">{t.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link href={`/u/${creator.username}`} className="flex min-w-0 items-center gap-3">
+                  <Avatar username={creator.username} avatarKey={creator.avatar_key} size={40} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-fg hover:text-accent">{creator.display_name || creator.username}</span>
+                    <span className="block text-xs text-fg-subtle">@{creator.username}</span>
+                  </span>
+                </Link>
+                <FollowButton
+                  creatorId={creator.id}
+                  initialFollowing={isFollowing}
+                  initialCount={followerCount}
+                  signedIn={!!viewer}
+                  isSelf={isOwner}
+                  nextPath={`/t/${t.slug}`}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {downloadable.length ? (
+                  <a href={`/api/download/${downloadable[0].id}`} className="btn btn-primary rounded-full px-5" rel="nofollow">
+                    ↓ Download{downloadable.length > 1 ? " main file" : ""}
+                  </a>
+                ) : null}
+                {approved ? <FavoriteButton templateId={t.id} slug={t.slug} initial={isFavorite} signedIn={!!viewer} /> : null}
+                <Link href={`/report?template=${t.slug}`} className="btn btn-ghost rounded-full">⚑ Report</Link>
+              </div>
+            </div>
+          </div>
 
-          <section aria-labelledby="install-h">
-            <h2 id="install-h" className="mb-2 text-base font-semibold text-fg">Installation</h2>
-            <div className="prose-plain">{t.install_steps || "The creator did not provide installation steps."}</div>
-          </section>
-
-          <section aria-labelledby="deps-h">
-            <h2 id="deps-h" className="mb-2 text-base font-semibold text-fg">Dependencies</h2>
-            <div className="prose-plain">{t.dependencies || "None listed."}</div>
-          </section>
+          <div className="rounded-xl bg-surface-2 p-4">
+            <p className="text-sm font-medium text-fg">
+              {plural(t.view_count, "view")} · {plural(t.download_count, "download")} · {timeAgo(t.approved_at ?? t.created_at)}
+              {t.rating_count > 0 ? <> · ★ {Number(t.rating_avg).toFixed(1)} ({t.rating_count})</> : null}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <PlatformBadge platformId={t.platform_id} />
+              <CategoryBadge categoryId={t.category_id} />
+              {t.is_demo ? <DemoBadge /> : null}
+              {!approved ? <PublicationBadge status={t.publication_status} /> : null}
+              {t.tags.map((tag) => (
+                <Link key={tag} href={`/browse?q=${encodeURIComponent(tag)}`} className="text-xs text-accent hover:underline">#{tag}</Link>
+              ))}
+            </div>
+            {t.summary ? <p className="mt-3 text-sm text-fg">{t.summary}</p> : null}
+            <div className="prose-plain mt-2 text-sm">{t.description || null}</div>
+            <details className="mt-3 text-sm">
+              <summary className="cursor-pointer font-medium text-fg">Installation, requirements and license</summary>
+              <div className="mt-3 space-y-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">How to install</h2>
+                  <div className="prose-plain mt-1">{t.install_steps || "The creator did not provide installation steps."}</div>
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">Requirements</h2>
+                  <p className="mt-1 text-fg-muted">
+                    {platformLabel(t.platform_id)}{t.platform_version ? ` ${t.platform_version}` : ""}. {t.dependencies || "No other dependencies listed."}
+                  </p>
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">License: {license?.label ?? t.license_code}</h2>
+                  <p className="mt-1 text-fg-muted">{license?.summary}</p>
+                  {license?.url ? <a href={license.url} className="text-xs underline" rel="noopener noreferrer" target="_blank">License text</a> : null}
+                  {t.license_text ? <p className="prose-plain mt-1 text-xs">{t.license_text}</p> : null}
+                  <p className="mt-1 text-xs text-fg-subtle">The creator declared they have the right to share these files.</p>
+                </div>
+              </div>
+            </details>
+          </div>
 
           <section aria-labelledby="files-h">
-            <h2 id="files-h" className="mb-2 text-base font-semibold text-fg">Files</h2>
+            <h2 id="files-h" className="mb-2 text-lg font-semibold text-fg">Files <span className="text-sm font-normal text-fg-subtle">({files.length} · {formatBytes(totalSize)})</span></h2>
             <ul className="space-y-3">
               {files.map((f) => {
                 const state = computeDownloadState(t.publication_status, f);
@@ -101,11 +189,11 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                         </p>
                       </div>
                       {state === "ok" ? (
-                        <a href={`/api/download/${f.id}`} className="btn btn-primary" rel="nofollow">
-                          Download
+                        <a href={`/api/download/${f.id}`} className="btn btn-secondary rounded-full" rel="nofollow">
+                          ↓ Download
                         </a>
                       ) : (
-                        <span className="btn btn-secondary pointer-events-none opacity-70" aria-disabled="true">
+                        <span className="btn btn-secondary pointer-events-none rounded-full opacity-70" aria-disabled="true">
                           Download unavailable
                         </span>
                       )}
@@ -150,8 +238,8 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
           </section>
 
           <section aria-labelledby="reviews-h">
-            <h2 id="reviews-h" className="mb-3 text-base font-semibold text-fg">
-              Reviews {t.rating_count > 0 ? <span className="font-normal text-fg-muted">· ★ {Number(t.rating_avg).toFixed(1)} from {t.rating_count}</span> : null}
+            <h2 id="reviews-h" className="mb-3 text-lg font-semibold text-fg">
+              Ratings {t.rating_count > 0 ? <span className="text-sm font-normal text-fg-muted">· ★ {Number(t.rating_avg).toFixed(1)} from {t.rating_count}</span> : null}
             </h2>
             {approved && viewer && !isOwner ? (
               <div className="mb-4">
@@ -160,11 +248,11 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
             ) : null}
             {approved && !viewer ? (
               <p className="mb-4 text-sm text-fg-muted">
-                <Link href={`/login?next=/t/${t.slug}`} className="underline">Sign in</Link> to rate this template.
+                <Link href={`/login?next=/t/${t.slug}`} className="text-accent hover:underline">Sign in</Link> to rate this template.
               </p>
             ) : null}
             {reviews.length === 0 ? (
-              <p className="text-sm text-fg-subtle">No reviews yet.</p>
+              <p className="text-sm text-fg-subtle">No ratings yet.</p>
             ) : (
               <ul className="space-y-3">
                 {reviews.map((r) => {
@@ -187,61 +275,43 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
               </ul>
             )}
           </section>
+
+          {approved ? (
+            <Comments
+              templateId={t.id}
+              slug={t.slug}
+              count={t.comment_count}
+              comments={topLevel}
+              viewer={viewer?.profile ? { id: viewer.userId, username: viewer.profile.username, avatarUrl: previewUrl(viewer.profile.avatar_key) } : null}
+              staff={staff}
+              canComment={!!viewer?.profile && !viewer.profile.is_banned}
+            />
+          ) : null}
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <div className="card space-y-3 p-4">
-            <div className="flex gap-2">
-              {approved ? <FavoriteButton templateId={t.id} slug={t.slug} initial={isFavorite} signedIn={!!viewer} /> : null}
-              <Link href={`/report?template=${t.slug}`} className="btn btn-ghost">Report</Link>
-            </div>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-              <dt className="text-fg-subtle">Platform</dt>
-              <dd className="text-fg">{platformLabel(t.platform_id)}</dd>
-              <dt className="text-fg-subtle">Version</dt>
-              <dd className="text-fg">{t.platform_version || "Not specified"}</dd>
-              <dt className="text-fg-subtle">Downloads</dt>
-              <dd className="font-mono text-fg">{formatCount(t.download_count)}</dd>
-              <dt className="text-fg-subtle">Favorites</dt>
-              <dd className="font-mono text-fg">{formatCount(t.favorite_count)}</dd>
-              <dt className="text-fg-subtle">Files</dt>
-              <dd className="text-fg">{files.length} · {formatBytes(totalSize)}</dd>
-              <dt className="text-fg-subtle">Published</dt>
-              <dd className="text-fg">{formatDate(t.approved_at ?? t.created_at)}</dd>
-              <dt className="text-fg-subtle">Updated</dt>
-              <dd className="text-fg">{formatDate(t.updated_at)}</dd>
-            </dl>
-            {t.tags.length ? (
-              <div className="flex flex-wrap gap-1.5 border-t border-line pt-3">
-                {t.tags.map((tag) => (
-                  <Link key={tag} href={`/browse?q=${encodeURIComponent(tag)}`} className="rounded bg-surface-2 px-2 py-0.5 text-xs text-fg-muted hover:text-fg">
-                    #{tag}
+        <aside className="space-y-3" aria-labelledby="related-h">
+          <h2 id="related-h" className="text-sm font-semibold text-fg">More like this</h2>
+          {relatedItems.length === 0 ? <p className="text-sm text-fg-subtle">Nothing similar yet.</p> : null}
+          <ul className="space-y-3">
+            {relatedItems.map((r) => {
+              const thumb = previewUrl(r.cover_thumb_key);
+              return (
+                <li key={r.id}>
+                  <Link href={`/t/${r.slug}`} className="group flex gap-2">
+                    <span className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      {thumb ? <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="line-clamp-2 text-sm font-medium text-fg group-hover:text-accent">{r.title}</span>
+                      <span className="mt-1 block truncate text-xs text-fg-subtle">{r.creator_display_name || r.creator_username}</span>
+                      <span className="block text-xs text-fg-subtle">{plural(r.view_count, "view")} · {timeAgo(r.approved_at)}</span>
+                    </span>
                   </Link>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="card p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-fg-subtle">License</p>
-            <p className="mt-1 text-sm font-medium text-fg">{license?.label ?? t.license_code}</p>
-            <p className="mt-1 text-xs text-fg-muted">{license?.summary}</p>
-            {license?.url ? <a href={license.url} className="mt-1 inline-block text-xs underline" rel="noopener noreferrer" target="_blank">License text</a> : null}
-            {t.license_text ? <p className="prose-plain mt-2 text-xs">{t.license_text}</p> : null}
-            <p className="mt-2 text-xs text-fg-subtle">The creator declared they have the right to share these files.</p>
-          </div>
-
-          <div className="card p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-fg-subtle">Creator</p>
-            <Link href={`/u/${creator.username}`} className="mt-2 flex items-center gap-3 hover:text-accent">
-              <Avatar username={creator.username} avatarKey={creator.avatar_key} size={40} />
-              <div>
-                <p className="text-sm font-medium text-fg">{creator.display_name || creator.username}</p>
-                <p className="text-xs text-fg-subtle">@{creator.username} · joined {formatDate(creator.created_at)}</p>
-              </div>
-            </Link>
-            {creator.bio ? <p className="mt-2 line-clamp-3 text-xs text-fg-muted">{creator.bio}</p> : null}
-          </div>
+                </li>
+              );
+            })}
+          </ul>
         </aside>
       </div>
     </div>

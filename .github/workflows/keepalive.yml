@@ -1,0 +1,34 @@
+# Keeps the free services awake without anyone visiting:
+#  - a tiny database read so the Supabase Free project is not paused after 7 idle days,
+#  - re-enables the scheduled workflows so GitHub does not switch them off after
+#    60 days without commits.
+name: Keep alive
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Touch the database
+        env:
+          URL: ${{ secrets.SPIES_SUPABASE_URL }}
+          KEY: ${{ secrets.SPIES_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          curl -fsS "$URL/rest/v1/platforms?select=id&limit=1" -H "apikey: $KEY" -o /dev/null
+          echo "Database reachable"
+
+      - name: Keep scheduled workflows enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in scan.yml keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable" || true
+          done

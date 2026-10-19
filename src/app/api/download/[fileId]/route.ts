@@ -20,7 +20,7 @@ function deny(request: NextRequest, status: number, reason: string, message: str
 
 const MESSAGES: Record<string, string> = {
   not_found: "This file does not exist.",
-  template_not_approved: "This listing has not been approved by a moderator.",
+  template_not_approved: "This listing is not published.",
   creator_unavailable: "This creator's account is suspended.",
   file_superseded: "This file version was replaced.",
   validation_not_passed: "This file has not passed validation.",

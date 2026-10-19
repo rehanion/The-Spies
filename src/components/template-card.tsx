@@ -1,56 +1,57 @@
 import Link from "next/link";
 import { previewUrl } from "@/lib/env";
-import { formatCount, formatDate } from "@/lib/format";
-import { CategoryBadge, DemoBadge, PlatformBadge } from "@/components/badges";
+import { plural, timeAgo } from "@/lib/format";
+import { DemoBadge, PlatformBadge } from "@/components/badges";
+import { Avatar } from "@/components/site-header";
 import type { TemplateListItem } from "@/lib/data/templates";
 
+// Video-site style card: big thumbnail, then avatar, title, creator and stats.
 export function TemplateCard({ item }: { item: TemplateListItem }) {
   const thumb = previewUrl(item.cover_thumb_key);
   return (
-    <article className="group card overflow-hidden transition-colors hover:border-line-strong">
-      <Link href={`/t/${item.slug}`} className="block focus-visible:outline-offset-[-2px]">
-        <div className="relative aspect-[16/10] bg-surface-2">
+    <article className="group">
+      <Link href={`/t/${item.slug}`} className="block rounded-xl focus-visible:outline-offset-2">
+        <div className="relative aspect-video overflow-hidden rounded-xl bg-surface-2">
           {thumb ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={thumb} alt={`Screenshot of ${item.title}`} loading="lazy" className="h-full w-full object-cover" />
+            <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" />
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-fg-subtle">No screenshot</div>
           )}
-          <div className="absolute left-2 top-2 flex gap-1">
+          <div className="absolute bottom-2 left-2 flex gap-1">
             <PlatformBadge platformId={item.platform_id} />
             {item.is_demo ? <DemoBadge /> : null}
           </div>
-        </div>
-        <div className="space-y-2 p-3">
-          <h3 className="line-clamp-1 text-sm font-semibold text-fg group-hover:text-accent">{item.title}</h3>
-          {item.summary ? <p className="line-clamp-2 min-h-[2.5rem] text-xs leading-5 text-fg-muted">{item.summary}</p> : null}
-          <div className="flex items-center justify-between gap-2 text-xs text-fg-subtle">
-            <span className="truncate">by {item.creator_display_name || item.creator_username}</span>
-            <CategoryBadge categoryId={item.category_id} />
-          </div>
-          <dl className="flex items-center gap-3 border-t border-line pt-2 font-mono text-[11px] text-fg-subtle">
-            <div className="flex gap-1">
-              <dt className="sr-only">Downloads</dt>
-              <dd>↓ {formatCount(item.download_count)}</dd>
-            </div>
-            <div className="flex gap-1">
-              <dt className="sr-only">Rating</dt>
-              <dd>{item.rating_count > 0 ? `★ ${Number(item.rating_avg).toFixed(1)} (${item.rating_count})` : "No ratings"}</dd>
-            </div>
-            <div className="ml-auto">
-              <dt className="sr-only">Published</dt>
-              <dd>{formatDate(item.approved_at)}</dd>
-            </div>
-          </dl>
+          {item.rating_count > 0 ? (
+            <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-white">
+              ★ {Number(item.rating_avg).toFixed(1)}
+            </span>
+          ) : null}
         </div>
       </Link>
+      <div className="mt-3 flex gap-3">
+        <Link href={`/u/${item.creator_username}`} className="shrink-0" aria-label={`${item.creator_username}'s channel`}>
+          <Avatar username={item.creator_username} avatarKey={item.creator_avatar_key} size={36} />
+        </Link>
+        <div className="min-w-0">
+          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-fg">
+            <Link href={`/t/${item.slug}`} className="hover:text-accent">{item.title}</Link>
+          </h3>
+          <Link href={`/u/${item.creator_username}`} className="mt-1 block truncate text-xs text-fg-muted hover:text-fg">
+            {item.creator_display_name || item.creator_username}
+          </Link>
+          <p className="text-xs text-fg-subtle">
+            {plural(item.view_count, "view")} · {plural(item.download_count, "download")} · {timeAgo(item.approved_at)}
+          </p>
+        </div>
+      </div>
     </article>
   );
 }
 
 export function TemplateGrid({ items }: { items: TemplateListItem[] }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {items.map((item) => (
         <TemplateCard key={item.id} item={item} />
       ))}

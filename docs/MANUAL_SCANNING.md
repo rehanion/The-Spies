@@ -1,9 +1,15 @@
 # Manual malware scanning with ClamAV
 
-SPIES does not run an antivirus engine in the cloud: the free tiers have no
-room for one, and ClamAV signatures alone are ~300 MB. Instead an administrator
-scans new files on their own computer with [ClamAV](https://www.clamav.net/)
-(free, open source) and records the result. A file cannot be approved or
+> **Normally you do not need this.** The hourly GitHub Actions job
+> (`.github/workflows/scan.yml`) runs the same scanner automatically on GitHub's
+> free runners. This page is the fallback for when that job is paused, failing,
+> or you want to scan a file yourself.
+
+The free Worker and Supabase tiers have no room for an antivirus engine
+(ClamAV signatures alone are ~300 MB), so scanning happens on a separate
+machine: either the GitHub runner or your own computer with
+[ClamAV](https://www.clamav.net/)
+(free, open source), which records the result. A file cannot be approved or
 downloaded until a clean result is recorded for **the exact bytes stored**.
 
 What is recorded for every scan: scanner name and engine version, signature

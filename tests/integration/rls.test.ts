@@ -134,7 +134,8 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     ).not.toBeNull();
   });
 
-  it("approval needs a clean scan of the exact stored hash", async () => {
+  it("approval needs a clean scan of the exact stored hash (manual review mode)", async () => {
+    await service().from("site_settings").update({ auto_publish: false }).eq("id", 1);
     const l = await pendingListing(creator.id);
     await service().from("templates").update({ publication_status: "pending" }).eq("id", l.id);
     expect((await moderator.client.rpc("moderate_template", { p_template_id: l.id, p_action: "approve" })).error).not.toBeNull();
@@ -167,9 +168,86 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     expect((await admin.client.rpc("moderate_template", { p_template_id: l2.id, p_action: "approve" })).error).toBeNull();
     expect((await creator.client.from("templates").update({ description: "changed after approval" }).eq("id", l2.id)).error).toBeNull();
     expect((await service().from("templates").select("publication_status").eq("id", l2.id).single()).data?.publication_status).toBe("pending");
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
   });
 
-  it("flagged files block approval and downloads", async () => {
+  it("auto-publish makes a listing public only after a clean scan of the stored hash", async () => {
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
+    const l = await pendingListing(creator.id);
+    await creator.client.rpc("submit_template", { p_template_id: l.id });
+    const status = async () => (await service().from("templates").select("publication_status").eq("id", l.id).single()).data?.publication_status;
+    expect(await status()).toBe("pending");
+    // Mismatched hash: stays pending.
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: sha(),
+    });
+    expect(await status()).toBe("pending");
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+    });
+    expect(await status()).toBe("approved");
+    expect((await anon().rpc("file_download_state", { p_file_id: l.fileId })).data).toBe("ok");
+    // Metadata edits re-publish automatically because the files are unchanged and clean.
+    await creator.client.from("templates").update({ description: "edited" }).eq("id", l.id);
+    expect(await status()).toBe("approved");
+    // Only admins can switch the mode.
+    expect((await moderator.client.rpc("admin_set_auto_publish", { p_enabled: false })).error).not.toBeNull();
+    expect((await creator.client.from("site_settings").update({ auto_publish: false }).eq("id", 1)).error).not.toBeNull();
+    expect((await service().from("site_settings").select("auto_publish").single()).data?.auto_publish).toBe(true);
+  });
+
+  it("follows: only your own, counted, no self-follow", async () => {
+    const before = (await service().from("profiles").select("follower_count").eq("id", creator.id).single()).data!.follower_count;
+    expect((await other.client.from("follows").insert({ follower_id: other.id, creator_id: creator.id })).error).toBeNull();
+    expect((await other.client.from("follows").insert({ follower_id: creator.id, creator_id: other.id })).error).not.toBeNull();
+    expect((await creator.client.from("follows").insert({ follower_id: creator.id, creator_id: creator.id })).error).not.toBeNull();
+    expect((await service().from("profiles").select("follower_count").eq("id", creator.id).single()).data!.follower_count).toBe(before + 1);
+    expect((await creator.client.from("profiles").update({ follower_count: 999 } as never).eq("id", creator.id)).error).not.toBeNull();
+    expect((await creator.client.from("follows").select("*").eq("creator_id", creator.id)).data).toEqual([]);
+    expect((await anon().from("follows").select("*")).data).toEqual([]);
+    // Logged-out visitors can still browse every sort (the homepage uses trending).
+    for (const sort of ["trending", "recent", "views", "downloads", "rating", "relevance"]) {
+      expect((await anon().rpc("search_templates", { p_sort: sort, p_limit: 2 })).error, sort).toBeNull();
+    }
+    await other.client.from("follows").delete().eq("creator_id", creator.id);
+    expect((await service().from("profiles").select("follower_count").eq("id", creator.id).single()).data!.follower_count).toBe(before);
+  });
+
+  it("comments: public listings only, own edits, staff moderation, counted", async () => {
+    const l = await pendingListing(creator.id);
+    expect((await other.client.from("comments").insert({ template_id: l.id, author_id: other.id, body: "too early" })).error).not.toBeNull();
+    await creator.client.rpc("submit_template", { p_template_id: l.id });
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+    });
+    const { data: c, error } = await other.client.from("comments").insert({ template_id: l.id, author_id: other.id, body: "  Nice layout  " }).select("id, body").single();
+    expect(error).toBeNull();
+    expect(c?.body).toBe("Nice layout");
+    expect((await other.client.from("comments").insert({ template_id: l.id, author_id: creator.id, body: "impersonation" })).error).not.toBeNull();
+    const reply = await creator.client.from("comments").insert({ template_id: l.id, author_id: creator.id, parent_id: c!.id, body: "Thanks" }).select("id").single();
+    expect(reply.error).toBeNull();
+    expect((await anon().from("comments").select("id").eq("template_id", l.id)).data).toHaveLength(2);
+    await creator.client.from("comments").update({ body: "hijack" }).eq("id", c!.id);
+    expect((await service().from("comments").select("body").eq("id", c!.id).single()).data?.body).toBe("Nice layout");
+    expect((await service().from("templates").select("comment_count").eq("id", l.id).single()).data?.comment_count).toBe(2);
+    expect((await moderator.client.from("comments").delete({ count: "exact" }).eq("id", reply.data!.id)).count).toBe(1);
+    expect((await service().from("templates").select("comment_count").eq("id", l.id).single()).data?.comment_count).toBe(1);
+  });
+
+  it("views are counted once per visitor per day and only by the server", async () => {
+    const l = await pendingListing(creator.id);
+    await creator.client.rpc("submit_template", { p_template_id: l.id });
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+    });
+    expect((await other.client.rpc("register_view", { p_template_id: l.id, p_actor_hash: "x".repeat(32) })).error).not.toBeNull();
+    expect((await service().rpc("register_view", { p_template_id: l.id, p_actor_hash: "a".repeat(32) })).data).toBe(true);
+    expect((await service().rpc("register_view", { p_template_id: l.id, p_actor_hash: "a".repeat(32) })).data).toBe(false);
+    expect((await service().rpc("register_view", { p_template_id: l.id, p_actor_hash: "b".repeat(32) })).data).toBe(true);
+    expect((await service().from("templates").select("view_count").eq("id", l.id).single()).data?.view_count).toBe(2);
+  });
+
+  it("flagged files block approval, auto-publish and downloads", async () => {
     const l = await pendingListing(creator.id);
     await service().from("templates").update({ publication_status: "pending" }).eq("id", l.id);
     await moderator.client.rpc("record_scan_result", {
@@ -187,6 +265,7 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
   });
 
   it("reviews: no self-review, one per user, only on public listings", async () => {
+    await service().from("site_settings").update({ auto_publish: false }).eq("id", 1);
     const l = await pendingListing(creator.id);
     expect((await other.client.from("reviews").insert({ template_id: l.id, author_id: other.id, rating: 5 })).error).not.toBeNull();
     await service().from("templates").update({ publication_status: "pending" }).eq("id", l.id);
@@ -201,6 +280,7 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     const { data } = await service().from("templates").select("rating_count, rating_avg").eq("id", l.id).single();
     expect(data).toMatchObject({ rating_count: 1 });
     expect(Number(data?.rating_avg)).toBe(4);
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
   });
 
   it("download counts are de-duplicated and cannot be called by clients", async () => {
@@ -210,7 +290,7 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
   });
 
   it("private data stays private", async () => {
-    for (const table of ["reports", "moderation_events", "download_events", "scan_records", "rate_limits"] as const) {
+    for (const table of ["reports", "moderation_events", "download_events", "scan_records", "rate_limits", "template_views"] as const) {
       const { data } = await anon().from(table).select("*").limit(1);
       expect(data ?? [], table).toEqual([]);
     }

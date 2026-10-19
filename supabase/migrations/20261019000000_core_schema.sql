@@ -508,8 +508,11 @@ begin
   return new;
 end;
 $$;
-create trigger templates_audit after update of publication_status on public.templates
-  for each row execute function public.templates_audit_status();
+-- Not "update of publication_status": status changes made by the BEFORE
+-- trigger templates_guard must be logged too.
+create trigger templates_audit after update on public.templates
+  for each row when (new.publication_status is distinct from old.publication_status)
+  execute function public.templates_audit_status();
 
 -- A new file on an approved/pending listing invalidates approval.
 create or replace function public.template_files_after_insert()

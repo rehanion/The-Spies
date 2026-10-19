@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getViewer, isAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { limits, serverEnv } from "@/lib/server-env";
 import { publicEnv } from "@/lib/env";
 import { formatBytes, formatDateTime } from "@/lib/format";
-import { CleanupButton } from "@/components/admin/forms";
+import { AutoPublishToggle, CleanupButton } from "@/components/admin/forms";
 
 export const metadata: Metadata = { title: "Admin overview" };
 
@@ -27,7 +28,9 @@ async function processorHealth(): Promise<{ ok: boolean; detail: string }> {
 export default async function AdminOverview() {
   const admin = createAdminClient();
   const supabase = await createClient();
-  const [usage, processor, events] = await Promise.all([
+  const [viewer, { data: settings }, usage, processor, events] = await Promise.all([
+    getViewer(),
+    supabase.from("site_settings").select("auto_publish").eq("id", 1).maybeSingle(),
     admin.rpc("storage_usage"),
     processorHealth(),
     supabase.from("moderation_events").select("id, action, template_id, created_at, details").order("created_at", { ascending: false }).limit(10),
@@ -84,6 +87,13 @@ export default async function AdminOverview() {
         <p className="mt-2 text-xs text-fg-subtle">
           Provider quotas (Supabase Free: 1 GB storage, 500 MB database, 5 GB egress; Cloudflare Workers Free: 100,000 requests/day) are not visible from here. Check the Supabase and Cloudflare dashboards weekly.
         </p>
+      </section>
+
+      <section aria-labelledby="publish-h">
+        <h2 id="publish-h" className="mb-3 text-base font-semibold text-fg">Publishing</h2>
+        <div className="card p-4">
+          <AutoPublishToggle enabled={settings?.auto_publish ?? true} canEdit={isAdmin(viewer)} />
+        </div>
       </section>
 
       <section aria-labelledby="maint-h">

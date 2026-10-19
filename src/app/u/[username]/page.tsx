@@ -10,13 +10,15 @@ import { Badge, DemoBadge } from "@/components/badges";
 import { TemplateGrid } from "@/components/template-card";
 import { Pagination } from "@/components/pagination";
 import { EmptyState } from "@/components/empty-state";
+import { FollowButton } from "@/components/follow-button";
+import { getViewer } from "@/lib/auth";
 
 const getProfile = cache(async (username: string) => {
   if (!/^[a-z0-9_]{3,24}$/.test(username)) return null;
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, username, display_name, bio, avatar_key, role, is_banned, is_demo, created_at")
+    .select("id, username, display_name, bio, avatar_key, role, is_banned, is_demo, created_at, follower_count")
     .eq("username", username)
     .maybeSingle();
   return data;
@@ -33,45 +35,71 @@ export default async function CreatorPage({ params, searchParams }: PageProps<"/
   if (!profile || profile.is_banned) notFound();
   const sp = await searchParams;
   const page = Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1;
-  const result = await searchTemplates({ creatorId: profile.id, sort: "recent", page, pageSize: 12 });
-  const downloads = result.items.reduce((n, t) => n + t.download_count, 0);
+  const sort = sp.sort === "popular" ? "views" : "recent";
+  const viewer = await getViewer();
+  const supabase = await createClient();
+  const [result, follow] = await Promise.all([
+    searchTemplates({ creatorId: profile.id, sort, page, pageSize: 12 }),
+    viewer ? supabase.from("follows").select("creator_id").eq("follower_id", viewer.userId).eq("creator_id", profile.id).maybeSingle() : null,
+  ]);
+  const base = `/u/${profile.username}`;
+  const tabHref = (s: string) => (s === "recent" ? base : `${base}?sort=popular`);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-      <header className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
-        <Avatar username={profile.username} avatarKey={profile.avatar_key} size={72} />
+    <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
+      <div className="h-28 rounded-2xl bg-gradient-to-r from-surface-3 via-surface-2 to-accent/20 sm:h-40" aria-hidden="true" />
+      <header className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
+        <Avatar username={profile.username} avatarKey={profile.avatar_key} size={96} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold text-fg">{profile.display_name || profile.username}</h1>
+            <h1 className="text-2xl font-bold text-fg sm:text-3xl">{profile.display_name || profile.username}</h1>
             {profile.role !== "user" ? <Badge tone="accent">{profile.role === "admin" ? "Admin" : "Moderator"}</Badge> : null}
             {profile.is_demo ? <DemoBadge /> : null}
           </div>
-          <p className="text-sm text-fg-subtle">@{profile.username} · joined {formatDate(profile.created_at)}</p>
-          {profile.bio ? <p className="prose-plain mt-3 max-w-2xl whitespace-pre-line text-sm text-fg-muted">{profile.bio}</p> : null}
-        </div>
-        <dl className="flex gap-6 text-sm">
-          <div>
-            <dt className="text-xs text-fg-subtle">Templates</dt>
-            <dd className="font-mono text-lg text-fg">{formatCount(result.total)}</dd>
+          <p className="mt-1 text-sm text-fg-muted">
+            @{profile.username} · {formatCount(result.total)} template{result.total === 1 ? "" : "s"} · joined {formatDate(profile.created_at)}
+          </p>
+          {profile.bio ? <p className="mt-2 line-clamp-3 max-w-2xl whitespace-pre-line text-sm text-fg-muted">{profile.bio}</p> : null}
+          <div className="mt-3">
+            <FollowButton
+              creatorId={profile.id}
+              initialFollowing={!!follow?.data}
+              initialCount={profile.follower_count}
+              signedIn={!!viewer}
+              isSelf={viewer?.userId === profile.id}
+              nextPath={base}
+            />
           </div>
-          {result.pageCount === 1 ? (
-            <div>
-              <dt className="text-xs text-fg-subtle">Downloads</dt>
-              <dd className="font-mono text-lg text-fg">{formatCount(downloads)}</dd>
-            </div>
-          ) : null}
-        </dl>
+        </div>
+        {viewer?.userId === profile.id ? (
+          <div className="flex gap-2">
+            <Link href="/account" className="btn btn-secondary rounded-full">Customize channel</Link>
+            <Link href="/dashboard" className="btn btn-secondary rounded-full">Manage uploads</Link>
+          </div>
+        ) : null}
       </header>
 
-      <section className="mt-8" aria-labelledby="tpl-h">
-        <h2 id="tpl-h" className="mb-4 text-lg font-semibold text-fg">Published templates</h2>
+      <nav aria-label="Sort templates" className="mt-6 flex gap-2 border-b border-line">
+        {[["recent", "Latest"], ["views", "Popular"]].map(([key, label]) => (
+          <Link
+            key={key}
+            href={tabHref(key)}
+            aria-current={sort === key ? "page" : undefined}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${sort === key ? "border-fg text-fg" : "border-transparent text-fg-muted hover:text-fg"}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
+
+      <section className="mt-6" aria-label="Templates">
         {result.items.length ? (
           <>
             <TemplateGrid items={result.items} />
-            <Pagination page={result.page} pageCount={result.pageCount} makeHref={(p) => `/u/${profile.username}${p > 1 ? `?page=${p}` : ""}`} />
+            <Pagination page={result.page} pageCount={result.pageCount} makeHref={(p) => `${tabHref(sort)}${p > 1 ? `${sort === "views" ? "&" : "?"}page=${p}` : ""}`} />
           </>
         ) : (
-          <EmptyState title="No published templates yet" action={<Link href="/browse" className="btn btn-secondary">Browse all templates</Link>} />
+          <EmptyState title="No templates yet" action={viewer?.userId === profile.id ? <Link href="/upload" className="btn btn-primary rounded-full px-5">Upload your first template</Link> : <Link href="/browse" className="btn btn-secondary rounded-full">Explore templates</Link>} />
         )}
       </section>
     </div>

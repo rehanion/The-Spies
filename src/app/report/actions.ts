@@ -21,6 +21,7 @@ const reportSchema = z
     claimant_name: optionalText(120),
     original_work_url: z.union([z.literal(""), z.url({ protocol: /^https?$/ }).max(500)]).transform((v) => v || null),
     good_faith: z.boolean(),
+    comment: z.union([z.literal(""), z.uuid()]).transform((v) => v || null),
   })
   .superRefine((v, ctx) => {
     if (v.kind !== "copyright") return;
@@ -41,6 +42,7 @@ export async function submitReport(_prev: ReportState, formData: FormData): Prom
     claimant_name: formData.get("claimant_name") ?? "",
     original_work_url: formData.get("original_work_url") ?? "",
     good_faith: formData.get("good_faith") === "on",
+    comment: formData.get("comment") ?? "",
   });
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Please check the form." };
 
@@ -72,6 +74,7 @@ export async function submitReport(_prev: ReportState, formData: FormData): Prom
       claimant_name: r.claimant_name,
       original_work_url: r.original_work_url,
       good_faith_statement: r.good_faith,
+      comment_id: r.comment,
     })
     .select("id")
     .single();

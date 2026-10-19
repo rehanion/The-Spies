@@ -19,12 +19,14 @@ export function ReportForm({
   siteKey,
   nonce,
   lockKind,
+  comment,
 }: {
   initialKind: string;
   template: string;
   siteKey: string;
   nonce?: string;
   lockKind?: boolean;
+  comment?: string;
 }) {
   const [state, action, pending] = useActionState(submitReport, null);
   const [kind, setKind] = useState(initialKind);
@@ -34,6 +36,8 @@ export function ReportForm({
   const copyright = kind === "copyright";
   return (
     <form action={action} className="space-y-4">
+      {comment ? <input type="hidden" name="comment" value={comment} /> : null}
+      {comment ? <p className="text-sm text-fg-muted">You are reporting a comment on this listing.</p> : null}
       {lockKind ? (
         <input type="hidden" name="kind" value={kind} />
       ) : (

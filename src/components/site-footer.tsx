@@ -9,15 +9,15 @@ export function SiteFooter() {
           <Logo />
           <p className="mt-3 max-w-md text-fg-muted">
             A free community library of trading-platform templates, workspaces and study configurations. No ads, no paid
-            tiers. Every file is quarantined, structurally validated, scanned with ClamAV and reviewed by a moderator
-            before it can be downloaded.
+            tiers. Every file is quarantined, structurally validated and scanned with ClamAV before it can be
+            downloaded, and moderators remove anything that breaks the rules.
           </p>
         </div>
         <div>
           <p className="mb-2 font-medium text-fg">Community</p>
           <ul className="space-y-1.5 text-fg-muted">
             <li><Link className="hover:text-fg" href="/browse">Browse templates</Link></li>
-            <li><Link className="hover:text-fg" href="/dashboard/new">Upload a template</Link></li>
+            <li><Link className="hover:text-fg" href="/upload">Upload a template</Link></li>
             <li><Link className="hover:text-fg" href="/rules">Acceptable use rules</Link></li>
           </ul>
         </div>

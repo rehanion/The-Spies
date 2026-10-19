@@ -1,95 +1,85 @@
 import Link from "next/link";
+import { getViewer } from "@/lib/auth";
 import { searchTemplates } from "@/lib/data/templates";
 import { TemplateGrid } from "@/components/template-card";
 import { EmptyState, Notice } from "@/components/empty-state";
-import { CATEGORY_LABELS, PLATFORM_LABELS } from "@/lib/catalog";
+import { FilterChips } from "@/components/chips";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORM_BLURBS: Record<string, string> = {
-  motivewave: "Analyses (.mwml) and analysis packs",
-  "sierra-chart": "Chartbooks, study collections, trade window configs",
-  quantower: "Workspace and template XML files",
-};
+function Shelf({ id, title, href, children }: { id: string; title: string; href?: string; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby={id} className="py-6">
+      <div className="mb-4 flex items-baseline justify-between">
+        <h2 id={id} className="text-xl font-semibold text-fg">{title}</h2>
+        {href ? <Link href={href} className="text-sm font-medium text-accent hover:underline">See all</Link> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export default async function HomePage() {
-  const [recent, popular] = await Promise.all([
+  const viewer = await getViewer();
+  const [trending, fresh, following] = await Promise.all([
+    searchTemplates({ sort: "trending", pageSize: 8 }),
     searchTemplates({ sort: "recent", pageSize: 8 }),
-    searchTemplates({ sort: "downloads", pageSize: 8 }),
+    viewer ? searchTemplates({ following: true, sort: "recent", pageSize: 4 }) : null,
   ]);
-  const hasDemo = [...recent.items, ...popular.items].some((i) => i.is_demo);
+  const hasDemo = [...trending.items, ...fresh.items].some((i) => i.is_demo);
+  const empty = trending.items.length === 0;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6">
-      <section className="border-b border-line py-12 sm:py-16">
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Order-flow template library</p>
-        <h1 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
-          Footprint, volume profile and DOM setups shared by traders, inspected before you download.
-        </h1>
-        <p className="mt-4 max-w-2xl text-fg-muted">
-          Browse screenshots and configuration details for MotiveWave, Sierra Chart and Quantower. Every file is held in
-          private quarantine until it passes validation, a ClamAV scan and moderator review. Free for everyone.
-        </p>
-        <form action="/browse" method="get" role="search" className="mt-6 flex max-w-xl gap-2">
-          <label htmlFor="home-search" className="sr-only">Search templates</label>
-          <input id="home-search" name="q" type="search" placeholder="Try “footprint”, “delta”, “composite profile”…" className="input h-11" />
-          <button type="submit" className="btn btn-primary h-11 px-5">Search</button>
-        </form>
-      </section>
+    <div className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
+      <FilterChips active="all" />
 
-      <section aria-labelledby="platforms-heading" className="py-10">
-        <h2 id="platforms-heading" className="text-sm font-semibold uppercase tracking-wider text-fg-muted">Platforms</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {Object.entries(PLATFORM_LABELS).map(([id, label]) => (
-            <Link key={id} href={`/browse?platform=${id}`} className="card p-4 transition-colors hover:border-accent/50">
-              <p className="font-medium text-fg">{label}</p>
-              <p className="mt-1 text-xs text-fg-subtle">{PLATFORM_BLURBS[id]}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
+      {!viewer ? (
+        <section className="mt-4 flex flex-col gap-4 rounded-2xl bg-surface-2 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-fg">Share and discover trading layouts</h1>
+            <p className="mt-1 text-sm text-fg-muted">
+              Free templates for MotiveWave, Sierra Chart and Quantower. Every file is virus-scanned before it goes live.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/signup" className="btn btn-primary rounded-full px-5">Join free</Link>
+            <Link href="/browse" className="btn btn-secondary rounded-full px-5">Explore</Link>
+          </div>
+        </section>
+      ) : (
+        <h1 className="sr-only">SPIES home</h1>
+      )}
 
       {hasDemo ? (
-        <Notice title="Demonstration content">
-          Listings marked <strong>Demo</strong> are sample data for development and testing. They are not real community
-          uploads, and their counts start at zero.
-        </Notice>
+        <div className="mt-4">
+          <Notice title="Demo content">
+            Listings marked <strong>Demo</strong> are samples, not real community uploads. Their counts start at zero.
+          </Notice>
+        </div>
       ) : null}
 
-      <section aria-labelledby="recent-heading" className="py-10">
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 id="recent-heading" className="text-lg font-semibold text-fg">Recently published</h2>
-          <Link href="/browse?sort=recent" className="text-sm text-fg-muted hover:text-accent">View all →</Link>
-        </div>
-        {recent.items.length ? (
-          <TemplateGrid items={recent.items} />
-        ) : (
-          <EmptyState title="No templates published yet" action={<Link href="/dashboard/new" className="btn btn-primary">Share the first template</Link>}>
-            Approved templates appear here once they pass scanning and review.
+      {following && following.items.length ? (
+        <Shelf id="following-h" title="From creators you follow" href="/feed">
+          <TemplateGrid items={following.items} />
+        </Shelf>
+      ) : null}
+
+      {empty ? (
+        <div className="py-10">
+          <EmptyState title="Nothing here yet" action={<Link href="/upload" className="btn btn-primary rounded-full px-5">Upload the first template</Link>}>
+            Templates appear here as soon as they pass the automatic checks.
           </EmptyState>
-        )}
-      </section>
-
-      {popular.items.some((i) => i.download_count > 0) ? (
-        <section aria-labelledby="popular-heading" className="py-10">
-          <div className="mb-4 flex items-baseline justify-between">
-            <h2 id="popular-heading" className="text-lg font-semibold text-fg">Most downloaded</h2>
-            <Link href="/browse?sort=downloads" className="text-sm text-fg-muted hover:text-accent">View all →</Link>
-          </div>
-          <TemplateGrid items={popular.items.filter((i) => i.download_count > 0)} />
-        </section>
-      ) : null}
-
-      <section aria-labelledby="categories-heading" className="py-10">
-        <h2 id="categories-heading" className="text-lg font-semibold text-fg">Categories</h2>
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
-            <Link key={id} href={`/browse?category=${id}`} className="rounded-md border border-line bg-surface px-3 py-2.5 text-sm text-fg-muted transition-colors hover:border-line-strong hover:text-fg">
-              {label}
-            </Link>
-          ))}
         </div>
-      </section>
+      ) : (
+        <>
+          <Shelf id="trending-h" title="Trending" href="/browse?sort=trending">
+            <TemplateGrid items={trending.items} />
+          </Shelf>
+          <Shelf id="new-h" title="New uploads" href="/browse?sort=recent">
+            <TemplateGrid items={fresh.items} />
+          </Shelf>
+        </>
+      )}
     </div>
   );
 }

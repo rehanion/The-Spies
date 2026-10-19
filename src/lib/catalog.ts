@@ -45,7 +45,9 @@ export const LICENSES: Record<string, { label: string; summary: string; url?: st
 };
 
 export const SORTS = {
-  recent: "Most recent",
+  trending: "Trending",
+  recent: "Newest",
+  views: "Most viewed",
   downloads: "Most downloaded",
   rating: "Top rated",
   relevance: "Best match",

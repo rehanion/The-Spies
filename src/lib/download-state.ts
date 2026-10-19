@@ -40,7 +40,7 @@ export function computeDownloadState(templateStatus: string, f: FileGateInput): 
 export const DOWNLOAD_STATE_MESSAGES: Record<DownloadState, string> = {
   ok: "Available",
   not_found: "File not found.",
-  template_not_approved: "Unavailable until a moderator approves this listing.",
+  template_not_approved: "Unavailable until this listing is published.",
   creator_unavailable: "Unavailable: the creator's account is suspended.",
   file_superseded: "This version was replaced and is no longer available.",
   validation_not_passed: "Unavailable: the file has not passed structural validation.",

@@ -14,7 +14,7 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
   const supabase = await createClient();
   const { data: reports } = await supabase
     .from("reports")
-    .select("*, template:templates(id, title, slug, publication_status)")
+    .select("*, template:templates(id, title, slug, publication_status), comment:comments(id, body)")
     .eq("status", status)
     .order("created_at", { ascending: status === "open" })
     .limit(200);
@@ -38,6 +38,12 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
                   <span className="ml-auto text-xs text-fg-subtle">{formatDateTime(r.created_at)}</span>
                 </div>
                 <p className="prose-plain mt-2">{r.details}</p>
+                {r.comment ? (
+                  <blockquote className="mt-2 border-l-2 border-warn pl-3 text-xs text-fg-muted">
+                    Reported comment: {(r.comment as unknown as { body: string }).body}{" "}
+                    {t ? <Link className="underline" href={`/t/${t.slug}#comments-h`}>open to delete</Link> : null}
+                  </blockquote>
+                ) : null}
                 {r.kind === "copyright" ? (
                   <dl className="mt-2 grid gap-x-3 text-xs sm:grid-cols-[max-content_1fr]">
                     <dt className="text-fg-subtle">Claimant</dt><dd>{r.claimant_name}</dd>

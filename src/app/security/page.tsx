@@ -35,11 +35,12 @@ export default function SecurityPage() {
           stored file, the result is not accepted.
         </li>
         <li>
-          <strong className="text-fg">Human review.</strong> A moderator reviews the listing, its screenshots and the scan result before publishing it.
+          <strong className="text-fg">Publishing and moderation.</strong> A listing goes live automatically once its files pass the scan (admins can switch the
+          site to manual approval instead). Moderators review reports and remove listings, comments or accounts that break the rules.
         </li>
         <li>
           <strong className="text-fg">Controlled download.</strong> Downloads use short-lived links that are only issued while the listing is approved, the
-          scan is clean and the file&apos;s fingerprint still matches what was scanned and approved. Replacing a file sends the listing back to review.
+          scan is clean and the file&apos;s fingerprint still matches what was scanned and approved. Replacing a file takes the listing offline until the new file has been scanned.
         </li>
       </ol>
 

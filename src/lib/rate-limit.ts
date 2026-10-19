@@ -8,6 +8,8 @@ export const RATE_LIMITS = {
   report: { limit: 5, windowSeconds: 3600 },
   review: { limit: 20, windowSeconds: 3600 },
   favorite: { limit: 120, windowSeconds: 3600 },
+  comment: { limit: 30, windowSeconds: 3600 },
+  follow: { limit: 120, windowSeconds: 3600 },
 } as const;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

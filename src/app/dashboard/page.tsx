@@ -38,7 +38,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
           <h1 className="text-2xl font-semibold text-fg">Creator dashboard</h1>
           <p className="mt-1 text-sm text-fg-muted">Your submissions, their review status and download statistics.</p>
         </div>
-        <Link href="/dashboard/new" className="btn btn-primary">Upload a template</Link>
+        <Link href="/upload" className="btn btn-primary">Upload a template</Link>
       </div>
 
       {sp.deleted ? <div className="mt-4"><Notice tone="ok">Submission deleted.</Notice></div> : null}
@@ -61,7 +61,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
 
       <div className="mt-8">
         {list.length === 0 ? (
-          <EmptyState title="You have not uploaded anything yet" action={<Link href="/dashboard/new" className="btn btn-primary">Upload your first template</Link>}>
+          <EmptyState title="You have not uploaded anything yet" action={<Link href="/upload" className="btn btn-primary">Upload your first template</Link>}>
             Share a footprint layout, DOM setup or full workspace with screenshots.
           </EmptyState>
         ) : (

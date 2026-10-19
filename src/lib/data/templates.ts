@@ -12,6 +12,7 @@ export interface SearchParams {
   sort?: string;
   page?: number;
   creatorId?: string;
+  following?: boolean;
   pageSize?: number;
 }
 
@@ -33,6 +34,7 @@ export async function searchTemplates(params: SearchParams) {
     p_limit: pageSize,
     p_offset: (page - 1) * pageSize,
     p_creator: params.creatorId || undefined,
+    p_following: params.following || undefined,
   });
   if (error) throw new Error(`Search failed: ${error.message}`);
   const items = data ?? [];
@@ -77,3 +79,14 @@ export async function getTemplateBySlug(slug: string) {
 }
 
 export type TemplateDetail = NonNullable<Awaited<ReturnType<typeof getTemplateBySlug>>>;
+
+export async function getComments(templateId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("comments")
+    .select("id, parent_id, body, created_at, edited_at, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_key)")
+    .eq("template_id", templateId)
+    .order("created_at", { ascending: true })
+    .limit(300);
+  return data ?? [];
+}

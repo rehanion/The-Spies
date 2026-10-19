@@ -168,3 +168,13 @@ export async function cleanupStaleUploads(): Promise<AdminState> {
   revalidatePath("/admin");
   return { ok: true, message: `Removed ${files?.length ?? 0} stale file reservations and ${shots?.length ?? 0} screenshots.` };
 }
+
+export async function setAutoPublish(enabled: boolean): Promise<AdminState> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) return { ok: false, message: "Admins only." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_set_auto_publish", { p_enabled: enabled });
+  if (error) return { ok: false, message: "Could not change the setting." };
+  revalidatePath("/admin");
+  return { ok: true, message: enabled ? "Uploads now go live automatically after a clean scan." : "Uploads now wait for your approval." };
+}

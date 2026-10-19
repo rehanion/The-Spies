@@ -9,5 +9,7 @@ for (const path of PAGES) {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
     await expect(page.getByRole("main")).toBeVisible();
+    // Streamed pages answer 200 even when a section throws, so check for the error boundary too.
+    await expect(page.getByText("Something went wrong")).toHaveCount(0);
   });
 }

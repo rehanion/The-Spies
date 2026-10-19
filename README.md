@@ -1,8 +1,10 @@
 # SPIES
 
 A free community library of trading-platform templates. Traders share MotiveWave, Sierra Chart and Quantower
-layouts with screenshots; every file is quarantined, structurally validated, scanned with ClamAV by an admin
-and reviewed by a moderator before anyone can download it.
+layouts with screenshots; every file is quarantined, structurally validated and scanned with ClamAV before anyone can
+download it. Listings go live automatically once the scan passes (admins can switch to manual approval), and
+moderators remove anything reported. The site is laid out like a video community: a trending/new home feed,
+creator channels you can follow, a Following feed, views, comments with replies, ratings and saves.
 
 Runs entirely on free tiers: **Next.js on Cloudflare Workers (Free)**, **Supabase (Free)** for Postgres, Auth,
 Storage and one Edge Function, and **Cloudflare Turnstile (Free)**. No ads, payments, paid APIs or billable
@@ -204,8 +206,16 @@ are read from the database, never from user-editable JWT metadata.
 
 ## Moderation and scanning
 
-- **Admin → Review queue** lists listings waiting for review and files waiting for a scan.
-- Scan pending files with `npm run admin:scan` or by hand: see [docs/MANUAL_SCANNING.md](docs/MANUAL_SCANNING.md).
+- **Automatic scanning.** `.github/workflows/scan.yml` runs every hour on GitHub's free runners: it installs
+  ClamAV, updates signatures, signs in as a dedicated moderator account and scans every pending file with
+  `scripts/admin-scan.mjs`. Clean files publish their listing automatically; infected files are flagged and
+  never downloadable. Secrets: `SPIES_SUPABASE_URL`, `SPIES_SUPABASE_PUBLISHABLE_KEY`, `SPIES_SCANNER_EMAIL`,
+  `SPIES_SCANNER_PASSWORD` (a moderator account, not the service-role key).
+- **Keep-alive.** `.github/workflows/keepalive.yml` pings the database daily so the free Supabase project is
+  never paused, and re-enables both workflows so GitHub does not switch them off after 60 quiet days.
+- **Admin → Overview → Publishing** switches between auto-publish (default) and manual approval.
+- **Admin → Review queue** lists listings waiting for approval (manual mode) and files waiting for a scan.
+- You can also scan by hand with `npm run admin:scan`: see [docs/MANUAL_SCANNING.md](docs/MANUAL_SCANNING.md).
 - **Admin → Reports** handles abuse, malware and copyright reports. A copyright complaint needs claimant name,
   contact email, listing and a good-faith statement; remove the listing if the claim is plausible.
 - **Admin → Users**: suspend accounts (their listings disappear and downloads stop) and set roles.
@@ -264,8 +274,7 @@ These need your accounts and cannot be done from the repository:
 3. Create the Turnstile widget.
 4. Set Worker secrets and public build variables, then `npm run deploy`.
 5. Sign up and promote yourself to admin with the SQL above.
-6. Install ClamAV on your computer and run `freshclam`.
-7. Visit the site at least weekly (or have any traffic) so the free Supabase project is not paused.
-8. Decide whether to seed demo content in production (`npm run seed:demo`), and remove it once real listings
+6. Create a moderator account for the scanner and add the four `SPIES_*` secrets to the GitHub repository.
+7. Decide whether to seed demo content in production (`npm run seed:demo`), and remove it once real listings
    exist (`npm run seed:demo -- --remove`).
-9. Have the acceptable-use rules and copyright process reviewed for your jurisdiction.
+8. Have the acceptable-use rules and copyright process reviewed for your jurisdiction.

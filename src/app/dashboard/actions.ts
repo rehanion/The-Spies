@@ -27,7 +27,9 @@ function fieldErrors(issues: { path: PropertyKey[]; message: string }[]): Record
   return out;
 }
 
-export async function createSubmission(_prev: FormState, formData: FormData): Promise<FormState> {
+type CreateResult = { ok: true; id: string; slug: string } | { ok: false; message: string; fieldErrors?: Record<string, string> };
+
+async function createTemplateRecord(formData: FormData): Promise<CreateResult> {
   const viewer = await getViewer();
   if (!viewer?.profile) return { ok: false, message: "Sign in to upload." };
   if (viewer.profile.is_banned) return { ok: false, message: "Your account is suspended." };
@@ -39,7 +41,7 @@ export async function createSubmission(_prev: FormState, formData: FormData): Pr
   const captcha = await verifyTurnstile(formData.get("turnstileToken"), await clientIp());
   if (!captcha.ok) return { ok: false, message: captcha.message };
   if (!(await consumeRateLimit("createSubmission", viewer.userId))) {
-    return { ok: false, message: "You are creating submissions too quickly. Try again later." };
+    return { ok: false, message: "You are creating uploads too quickly. Try again later." };
   }
 
   const supabase = await createClient();
@@ -50,17 +52,28 @@ export async function createSubmission(_prev: FormState, formData: FormData): Pr
     .eq("creator_id", viewer.userId)
     .gte("created_at", since);
   if ((count ?? 0) >= limits().perUserDailySubmissions) {
-    return { ok: false, message: `You can create up to ${limits().perUserDailySubmissions} submissions per day.` };
+    return { ok: false, message: `You can create up to ${limits().perUserDailySubmissions} uploads per day.` };
   }
 
   const slug = `${slugify(parsed.data.title, 80)}-${randomSuffix(5)}`;
   const { data, error } = await supabase
     .from("templates")
     .insert({ ...parsed.data, slug, creator_id: viewer.userId })
-    .select("id")
+    .select("id, slug")
     .single();
-  if (error || !data) return { ok: false, message: "The submission could not be created. Please try again." };
-  redirect(`/dashboard/submissions/${data.id}?created=1`);
+  if (error || !data) return { ok: false, message: "The upload could not be created. Please try again." };
+  return { ok: true, id: data.id, slug: data.slug };
+}
+
+export async function createSubmission(_prev: FormState, formData: FormData): Promise<FormState> {
+  const result = await createTemplateRecord(formData);
+  if (!result.ok) return result;
+  redirect(`/dashboard/submissions/${result.id}?created=1`);
+}
+
+/** Used by the one-page upload: creates the draft and returns its id so the browser can upload files next. */
+export async function createUploadDraft(formData: FormData): Promise<CreateResult> {
+  return createTemplateRecord(formData);
 }
 
 export async function updateSubmission(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -121,7 +134,18 @@ export async function submitForReview(templateId: string): Promise<FormState> {
   if (error) return { ok: false, message: error.message };
   revalidatePath(`/dashboard/submissions/${templateId}`);
   revalidatePath("/dashboard");
-  return { ok: true, message: "Submitted. A moderator will review it after the files are scanned." };
+  const [{ data: after }, { data: settings }] = await Promise.all([
+    supabase.from("templates").select("publication_status").eq("id", templateId).single(),
+    supabase.from("site_settings").select("auto_publish").eq("id", 1).maybeSingle(),
+  ]);
+  return {
+    ok: true,
+    message: after?.publication_status === "approved"
+      ? "Published! Your template is live."
+      : settings?.auto_publish === false
+        ? "Submitted. A moderator will review it after the virus scan."
+        : "Submitted. It goes live automatically as soon as the virus scan has passed.",
+  };
 }
 
 export async function withdrawSubmission(templateId: string): Promise<FormState> {
