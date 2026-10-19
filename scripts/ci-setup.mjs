@@ -66,9 +66,13 @@ async function supabaseEnv() {
 }
 
 async function cloudflareEnv() {
-  const accounts = await cf("/accounts");
-  if (accounts.length !== 1) throw new Error(`The Cloudflare token must be limited to exactly one account (it sees ${accounts.length}).`);
-  const account = accounts[0].id;
+  // Tokens without "Account Settings: Read" cannot list accounts, so the ID can be pinned in spies.deploy.json.
+  let account = config.cloudflareAccountId;
+  if (!account) {
+    const accounts = await cf("/accounts");
+    if (accounts.length !== 1) throw new Error(`Set cloudflareAccountId in spies.deploy.json (the token sees ${accounts.length} accounts).`);
+    account = accounts[0].id;
+  }
   exportEnv("CLOUDFLARE_ACCOUNT_ID", account, { secret: false });
 
   let sub = null;
