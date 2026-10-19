@@ -3,5 +3,28 @@
   "supabasePublishableKey": "sb_publishable_UOG3wJ_zCwMjA9vDqQvSfw_IlEzoTty",
   "workerName": "spies",
   "scannerEmail": "scanner@spies.invalid",
-  "cloudflareAccountId": "4082fd90e654fb3c8fc70eaa353ea368"
+  "cloudflareAccountId": "4082fd90e654fb3c8fc70eaa353ea368",
+  "dnsZone": "spies.eu.org",
+  "dns": [
+    {
+      "type": "TXT",
+      "name": "@",
+      "content": "brevo-code:38e3de3a35b4050f103cdded27ec3b1a"
+    },
+    {
+      "type": "CNAME",
+      "name": "brevo1._domainkey",
+      "content": "b1.spies-eu-org.dkim.brevo.com"
+    },
+    {
+      "type": "CNAME",
+      "name": "brevo2._domainkey",
+      "content": "b2.spies-eu-org.dkim.brevo.com"
+    },
+    {
+      "type": "TXT",
+      "name": "_dmarc",
+      "content": "v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com"
+    }
+  ]
 }
