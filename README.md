@@ -60,3 +60,7 @@ Manual scanning: [docs/MANUAL_SCANNING.md](docs/MANUAL_SCANNING.md).
 1. Insert it into `public.platforms` in a new migration.
 2. Add its file formats to `FORMATS` and `PLATFORM_FORMATS` in `supabase/functions/_shared/formats.ts`.
 3. Add its label and install hints in `src/lib/catalog.ts`.
+
+## License
+
+All rights reserved. See [LICENSE](LICENSE).
