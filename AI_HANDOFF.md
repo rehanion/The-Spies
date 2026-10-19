@@ -30,7 +30,7 @@ Live: https://spies.spies-4082fd.workers.dev
 - Accepted files: known template formats per platform (.mwml, .tml, .cht, .StdyCollct, .twconfig, .xml, .json, .pine, .txt, .md, .zip, .dll, .jar) plus any other extension, except programs, scripts, installers, shortcuts, disk images, macro Office files and non ZIP archives (see `BLOCKED_REASONS` in `supabase/functions/_shared/formats.ts`). Every file's content is also checked for executable or archive signatures.
 - Admins edit platforms, categories and each platform's accepted file types at /admin/catalog, and change user roles at /admin/users.
 - Email confirmation is off because Supabase's free mailer only reaches the project team. To turn it on, add a free SMTP provider (Brevo, Resend) in Supabase and set `emailConfirmation` to true in `spies.deploy.json`.
-- Domain: currently the free workers.dev address. A custom domain costs money, so ask first. Free options are eu.org or a renamed workers.dev subdomain.
+- Domain: owner chose a free eu.org domain (2026-10-19) and must request it at nic.eu.org with Cloudflare nameservers. When approved, set `customDomain` in `spies.deploy.json` (README explains the token permissions). Paid domains need the owner's OK.
 
 ## Stack
 

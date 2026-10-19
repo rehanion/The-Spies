@@ -107,7 +107,10 @@ async function cloudflareEnv() {
     sub = `spies-${account.slice(0, 6)}`;
     await cf(`/accounts/${account}/workers/subdomain`, { method: "PUT", body: JSON.stringify({ subdomain: sub }) });
   }
-  const host = `${config.workerName}.${sub}.workers.dev`;
+  const devHost = `${config.workerName}.${sub}.workers.dev`;
+  // A custom domain in spies.deploy.json becomes the main address; workers.dev redirects to it.
+  const host = config.customDomain || devHost;
+  const hosts = [...new Set([host, devHost])];
   exportEnv("NEXT_PUBLIC_SITE_URL", `https://${host}`, { secret: false });
 
   const widgets = await cf(`/accounts/${account}/challenges/widgets`);
@@ -115,14 +118,14 @@ async function cloudflareEnv() {
   if (!widget) {
     widget = await cf(`/accounts/${account}/challenges/widgets`, {
       method: "POST",
-      body: JSON.stringify({ name: "SPIES", domains: [host], mode: "managed" }),
+      body: JSON.stringify({ name: "SPIES", domains: hosts, mode: "managed" }),
     });
   } else {
     widget = await cf(`/accounts/${account}/challenges/widgets/${widget.sitekey}`);
-    if (!widget.domains.includes(host)) {
+    if (hosts.some((h) => !widget.domains.includes(h))) {
       widget = await cf(`/accounts/${account}/challenges/widgets/${widget.sitekey}`, {
         method: "PUT",
-        body: JSON.stringify({ name: "SPIES", domains: [...widget.domains, host], mode: widget.mode }),
+        body: JSON.stringify({ name: "SPIES", domains: [...new Set([...widget.domains, ...hosts])], mode: widget.mode }),
       });
     }
   }

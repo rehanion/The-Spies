@@ -27,6 +27,12 @@ function buildCsp(nonce: string): string {
 }
 
 export async function middleware(request: NextRequest) {
+  // With a custom domain, the old workers.dev address sends people there.
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  if (site && !site.includes(".workers.dev") && request.nextUrl.hostname.endsWith(".workers.dev")) {
+    return NextResponse.redirect(new URL(request.nextUrl.pathname + request.nextUrl.search, site), 301);
+  }
+
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   const nonce = btoa(String.fromCharCode(...bytes));
   const csp = buildCsp(nonce);

@@ -81,7 +81,12 @@ jobs:
         run: |
           trap 'rm -f "$WORKER_SECRETS_FILE"' EXIT
           node scripts/ci-setup.mjs supabase cloudflare worker-secrets
-          npx wrangler deploy --secrets-file "$WORKER_SECRETS_FILE"
+          DOMAIN=$(node -p "require('./spies.deploy.json').customDomain || ''")
+          if [ -n "$DOMAIN" ]; then
+            npx wrangler deploy --secrets-file "$WORKER_SECRETS_FILE" --domain "$DOMAIN"
+          else
+            npx wrangler deploy --secrets-file "$WORKER_SECRETS_FILE"
+          fi
 
       - name: Check the live site
         run: |
