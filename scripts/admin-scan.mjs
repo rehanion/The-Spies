@@ -110,9 +110,15 @@ function scan(path) {
 }
 
 const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const email = process.env.SPIES_ADMIN_EMAIL || (await ask("Admin email: "));
-const password = process.env.SPIES_ADMIN_PASSWORD || (await ask("Password: ", true));
-const { data: auth, error: authError } = await db.auth.signInWithPassword({ email, password });
+// The scheduled GitHub job signs in with a one-time login token (password
+// sign-in needs a Turnstile challenge once CAPTCHA is on); people use a password.
+const tokenHash = process.env.SPIES_ADMIN_TOKEN_HASH;
+const { data: auth, error: authError } = tokenHash
+  ? await db.auth.verifyOtp({ token_hash: tokenHash, type: "magiclink" })
+  : await db.auth.signInWithPassword({
+      email: process.env.SPIES_ADMIN_EMAIL || (await ask("Admin email: ")),
+      password: process.env.SPIES_ADMIN_PASSWORD || (await ask("Password: ", true)),
+    });
 if (authError || !auth.user) {
   console.error(`Sign-in failed: ${authError?.message ?? "unknown error"}`);
   process.exit(2);

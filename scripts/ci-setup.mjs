@@ -7,6 +7,7 @@
 //   node scripts/ci-setup.mjs supabase    Supabase URL/keys, derived secrets, scanner login
 //   node scripts/ci-setup.mjs cloudflare  account, workers.dev URL, Turnstile widget
 //   node scripts/ci-setup.mjs configure   Auth settings, function secrets, scanner account
+//   node scripts/ci-setup.mjs scanner-login  one-time login token for the scan job
 //
 // No step here can enable billing: it only reads keys, creates a Turnstile
 // widget (free) and a Supabase "secret" API key, and changes settings.
@@ -173,7 +174,21 @@ async function configure() {
   console.log("Scanner account ready");
 }
 
-const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure };
+// A one-time login for the scanner account, so the scan job never runs with the secret key.
+async function scannerLogin() {
+  const url = need("NEXT_PUBLIC_SUPABASE_URL");
+  const key = need("SUPABASE_SECRET_KEY");
+  const link = await call(url, key, "/auth/v1/admin/generate_link", {
+    method: "POST",
+    headers: { apikey: key },
+    body: JSON.stringify({ type: "magiclink", email: config.scannerEmail }),
+  });
+  const hash = link.hashed_token ?? link.properties?.hashed_token;
+  if (!hash) throw new Error("Could not create a scanner login token.");
+  exportEnv("SPIES_ADMIN_TOKEN_HASH", hash);
+}
+
+const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure, "scanner-login": scannerLogin };
 const step = steps[process.argv[2]];
 if (!step) {
   console.error(`Usage: ci-setup.mjs ${Object.keys(steps).join("|")}`);
