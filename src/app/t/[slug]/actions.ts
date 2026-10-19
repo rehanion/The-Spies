@@ -27,6 +27,29 @@ export async function toggleFavorite(templateId: string, slug: string, favorite:
   return { ok: true, message: favorite ? "Saved to favorites." : "Removed from favorites." };
 }
 
+export type LikeResult = { ok: boolean; message: string; liked?: boolean; likeCount?: number };
+
+export async function toggleLike(templateId: string, slug: string, like: boolean): Promise<LikeResult> {
+  const viewer = await getViewer();
+  if (!viewer?.profile) return { ok: false, message: "Sign in to like templates." };
+  if (viewer.profile.is_banned) return { ok: false, message: "Your account is suspended." };
+  if (!uuid.safeParse(templateId).success || !slugSchema.safeParse(slug).success) return { ok: false, message: "Invalid request." };
+  if (!(await consumeRateLimit("like", viewer.userId))) return { ok: false, message: "Too many requests. Try again later." };
+  const supabase = await createClient();
+  const { error } = like
+    ? await supabase.from("likes").insert({ user_id: viewer.userId, template_id: templateId })
+    : await supabase.from("likes").delete().eq("user_id", viewer.userId).eq("template_id", templateId);
+  // 23505: already liked, which is the state the viewer asked for.
+  if (error && error.code !== "23505") {
+    if (error.message.includes("own template")) return { ok: false, message: "You cannot like your own template." };
+    if (error.message.includes("Like limit")) return { ok: false, message: "Daily like limit reached. Try again tomorrow." };
+    return { ok: false, message: "Could not update your like." };
+  }
+  const { data } = await supabase.from("templates").select("like_count").eq("id", templateId).maybeSingle();
+  revalidatePath(`/t/${slug}`);
+  return { ok: true, message: like ? "Liked." : "Like removed.", liked: like, likeCount: data?.like_count };
+}
+
 const reviewSchema = z.object({
   templateId: uuid,
   slug: slugSchema,

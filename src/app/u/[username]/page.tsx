@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { searchTemplates } from "@/lib/data/templates";
 import { createClient } from "@/lib/supabase/server";
-import { formatCount, formatDate } from "@/lib/format";
+import { formatCount, formatDate, plural } from "@/lib/format";
 import { Avatar } from "@/components/site-header";
 import { Badge, DemoBadge } from "@/components/badges";
 import { TemplateGrid } from "@/components/template-card";
@@ -18,7 +18,7 @@ const getProfile = cache(async (username: string) => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, username, display_name, bio, avatar_key, role, is_banned, is_demo, created_at, follower_count")
+    .select("id, username, display_name, bio, avatar_key, role, is_banned, is_demo, created_at, follower_count, points")
     .eq("username", username)
     .maybeSingle();
   return data;
@@ -34,14 +34,14 @@ export default async function CreatorPage({ params, searchParams }: PageProps<"/
   const [profile, viewer, sp] = await Promise.all([getProfile((await params).username), getViewer(), searchParams]);
   if (!profile || profile.is_banned) notFound();
   const page = Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1;
-  const sort = sp.sort === "popular" ? "views" : "recent";
+  const sort = sp.sort === "popular" ? "views" : sp.sort === "liked" ? "likes" : "recent";
   const supabase = await createClient();
   const [result, follow] = await Promise.all([
     searchTemplates({ creatorId: profile.id, sort, page, pageSize: 12 }),
     viewer ? supabase.from("follows").select("creator_id").eq("follower_id", viewer.userId).eq("creator_id", profile.id).maybeSingle() : null,
   ]);
   const base = `/u/${profile.username}`;
-  const tabHref = (s: string) => (s === "recent" ? base : `${base}?sort=popular`);
+  const tabHref = (s: string) => (s === "views" ? `${base}?sort=popular` : s === "likes" ? `${base}?sort=liked` : base);
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
@@ -55,7 +55,9 @@ export default async function CreatorPage({ params, searchParams }: PageProps<"/
             {profile.is_demo ? <DemoBadge /> : null}
           </div>
           <p className="mt-1 text-sm text-fg-muted">
-            @{profile.username} · {formatCount(result.total)} template{result.total === 1 ? "" : "s"} · joined {formatDate(profile.created_at)}
+            @{profile.username} · {formatCount(result.total)} template{result.total === 1 ? "" : "s"} ·{" "}
+            <span title="One point for every like on this creator's templates">{plural(profile.points, "point")}</span> · joined{" "}
+            {formatDate(profile.created_at)}
           </p>
           {profile.bio ? <p className="mt-2 line-clamp-3 max-w-2xl whitespace-pre-line text-sm text-fg-muted">{profile.bio}</p> : null}
           <div className="mt-3">
@@ -78,7 +80,7 @@ export default async function CreatorPage({ params, searchParams }: PageProps<"/
       </header>
 
       <nav aria-label="Sort templates" className="mt-6 flex gap-2 border-b border-line">
-        {[["recent", "Latest"], ["views", "Popular"]].map(([key, label]) => (
+        {[["recent", "Latest"], ["views", "Popular"], ["likes", "Most liked"]].map(([key, label]) => (
           <Link
             key={key}
             href={tabHref(key)}
@@ -94,7 +96,7 @@ export default async function CreatorPage({ params, searchParams }: PageProps<"/
         {result.items.length ? (
           <>
             <TemplateGrid items={result.items} />
-            <Pagination page={result.page} pageCount={result.pageCount} makeHref={(p) => `${tabHref(sort)}${p > 1 ? `${sort === "views" ? "&" : "?"}page=${p}` : ""}`} />
+            <Pagination page={result.page} pageCount={result.pageCount} makeHref={(p) => `${tabHref(sort)}${p > 1 ? `${sort === "recent" ? "?" : "&"}page=${p}` : ""}`} />
           </>
         ) : (
           <EmptyState title="No templates yet" action={viewer?.userId === profile.id ? <Link href="/upload" className="btn btn-primary rounded-full px-5">Upload your first template</Link> : <Link href="/browse" className="btn btn-secondary rounded-full">Explore templates</Link>} />

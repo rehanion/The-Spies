@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { previewUrl } from "@/lib/env";
-import { plural, timeAgo } from "@/lib/format";
+import { formatCount, plural, timeAgo } from "@/lib/format";
 import { DemoBadge, PlatformBadge } from "@/components/badges";
 import { Avatar } from "@/components/site-header";
 import type { TemplateListItem } from "@/lib/data/templates";
@@ -22,10 +22,17 @@ export function TemplateCard({ item, eager = false }: { item: TemplateListItem; 
             <PlatformBadge platformId={item.platform_id} />
             {item.is_demo ? <DemoBadge /> : null}
           </div>
-          {item.rating_count > 0 ? (
-            <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-[11px] text-white">
-              ★ {Number(item.rating_avg).toFixed(1)}
-            </span>
+          {item.rating_count > 0 || item.like_count > 0 ? (
+            <div className="absolute bottom-2 right-2 flex gap-1 font-mono text-[11px] text-white">
+              {item.like_count > 0 ? (
+                <span className="rounded bg-black/75 px-1.5 py-0.5" aria-label={plural(item.like_count, "like")}>
+                  ♥ {formatCount(item.like_count)}
+                </span>
+              ) : null}
+              {item.rating_count > 0 ? (
+                <span className="rounded bg-black/75 px-1.5 py-0.5">★ {Number(item.rating_avg).toFixed(1)}</span>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </Link>

@@ -106,6 +106,7 @@ export const SORTS = {
   trending: "Trending",
   recent: "Newest",
   views: "Most viewed",
+  likes: "Most liked",
   downloads: "Most downloaded",
   rating: "Top rated",
   relevance: "Best match",

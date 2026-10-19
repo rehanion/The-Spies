@@ -12,6 +12,7 @@ export const RATE_LIMITS = {
   favorite: { limit: 120, windowSeconds: 3600 },
   comment: { limit: 30, windowSeconds: 3600 },
   follow: { limit: 120, windowSeconds: 3600 },
+  like: { limit: 120, windowSeconds: 3600 },
 } as const;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

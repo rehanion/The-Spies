@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { deleteReview, saveReview, toggleFavorite, type ActionState } from "./actions";
+import { formatCount } from "@/lib/format";
+import { deleteReview, saveReview, toggleFavorite, toggleLike, type ActionState } from "./actions";
 
 export function FavoriteButton({
   templateId,
@@ -40,6 +41,74 @@ export function FavoriteButton({
         }
       >
         {fav ? "★ Saved" : "☆ Save"}
+      </button>
+      {msg ? <span role="alert" className="text-xs text-danger">{msg}</span> : null}
+    </div>
+  );
+}
+
+/** Like toggle with an optimistic count. Owners see the count but cannot like. */
+export function LikeButton({
+  templateId,
+  slug,
+  initialLiked,
+  initialCount,
+  signedIn,
+  isOwner,
+}: {
+  templateId: string;
+  slug: string;
+  initialLiked: boolean;
+  initialCount: number;
+  signedIn: boolean;
+  isOwner: boolean;
+}) {
+  const [liked, setLiked] = useState(initialLiked);
+  const [count, setCount] = useState(initialCount);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+  const label = `${formatCount(count)} like${count === 1 ? "" : "s"}`;
+  if (isOwner) {
+    return (
+      <span className="btn btn-secondary pointer-events-none" aria-label={label}>
+        <span aria-hidden="true">♥</span> {formatCount(count)}
+      </span>
+    );
+  }
+  if (!signedIn) {
+    return (
+      <a href={`/login?next=/t/${slug}`} className="btn btn-secondary" aria-label={`Like, ${label}`}>
+        <span aria-hidden="true">♡</span> {formatCount(count)}
+      </a>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        className={`btn btn-secondary ${liked ? "text-accent" : ""}`}
+        aria-pressed={liked}
+        aria-label={`${liked ? "Unlike" : "Like"}, ${label}`}
+        disabled={pending}
+        onClick={() => {
+          const next = !liked;
+          const before = { liked, count };
+          setLiked(next);
+          setCount((c) => Math.max(0, c + (next ? 1 : -1)));
+          setMsg(null);
+          start(async () => {
+            const res = await toggleLike(templateId, slug, next);
+            if (res.ok) {
+              if (typeof res.likeCount === "number") setCount(res.likeCount);
+            } else {
+              setLiked(before.liked);
+              setCount(before.count);
+              setMsg(res.message);
+            }
+          });
+        }}
+      >
+        <span aria-hidden="true">{liked ? "♥" : "♡"}</span> {formatCount(count)}
       </button>
       {msg ? <span role="alert" className="text-xs text-danger">{msg}</span> : null}
     </div>

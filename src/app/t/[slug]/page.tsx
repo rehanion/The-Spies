@@ -17,7 +17,7 @@ import { Avatar } from "@/components/site-header";
 import { Badge, CategoryBadge, DemoBadge, PlatformBadge, PublicationBadge, ScanBadge } from "@/components/badges";
 import { Notice } from "@/components/empty-state";
 import { FollowButton } from "@/components/follow-button";
-import { DeleteReviewButton, FavoriteButton, ReviewForm } from "./interactive";
+import { DeleteReviewButton, FavoriteButton, LikeButton, ReviewForm } from "./interactive";
 import { Comments, type CommentView } from "./comments";
 
 export async function generateMetadata({ params }: PageProps<"/t/[slug]">): Promise<Metadata> {
@@ -40,16 +40,21 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
   const approved = t.publication_status === "approved";
 
   const supabase = await createClient();
-  const [favRow, followRow, creatorStats, rawComments, related] = await Promise.all([
+  const [favRow, likeRow, followRow, creatorStats, rawComments, related] = await Promise.all([
     viewer ? supabase.from("favorites").select("template_id").eq("template_id", t.id).eq("user_id", viewer.userId).maybeSingle() : null,
+    viewer && approved && !isOwner
+      ? supabase.from("likes").select("template_id").eq("template_id", t.id).eq("user_id", viewer.userId).maybeSingle()
+      : null,
     viewer ? supabase.from("follows").select("creator_id").eq("creator_id", creator.id).eq("follower_id", viewer.userId).maybeSingle() : null,
-    supabase.from("profiles").select("follower_count").eq("id", creator.id).maybeSingle(),
+    supabase.from("profiles").select("follower_count, points").eq("id", creator.id).maybeSingle(),
     getComments(t.id),
     approved ? searchTemplates({ category: t.category_id, sort: "trending", pageSize: 9 }).catch(() => null) : null,
   ]);
   const isFavorite = !!favRow?.data;
   const isFollowing = !!followRow?.data;
+  const isLiked = !!likeRow?.data;
   const followerCount = creatorStats.data?.follower_count ?? 0;
+  const creatorPoints = creatorStats.data?.points ?? 0;
 
   // Count a view once per visitor per day, after the page is sent.
   if (approved && !isOwner) {
@@ -116,7 +121,7 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                   <Avatar username={creator.username} avatarKey={creator.avatar_key} size={40} />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-fg hover:text-accent">{creator.display_name || creator.username}</span>
-                    <span className="block text-xs text-fg-subtle">@{creator.username}</span>
+                    <span className="block text-xs text-fg-subtle">@{creator.username} · {plural(creatorPoints, "point")}</span>
                   </span>
                 </Link>
                 <FollowButton
@@ -133,6 +138,16 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                   <a href={`/api/download/${downloadable[0].id}`} className="btn btn-primary rounded-full px-5" rel="nofollow">
                     ↓ Download{downloadable.length > 1 ? " main file" : ""}
                   </a>
+                ) : null}
+                {approved ? (
+                  <LikeButton
+                    templateId={t.id}
+                    slug={t.slug}
+                    initialLiked={isLiked}
+                    initialCount={t.like_count}
+                    signedIn={!!viewer}
+                    isOwner={isOwner}
+                  />
                 ) : null}
                 {approved ? <FavoriteButton templateId={t.id} slug={t.slug} initial={isFavorite} signedIn={!!viewer} /> : null}
                 <Link href={`/report?template=${t.slug}`} className="btn btn-ghost rounded-full">⚑ Report</Link>

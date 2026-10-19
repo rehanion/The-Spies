@@ -240,7 +240,7 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     expect((await creator.client.from("follows").select("*").eq("creator_id", creator.id)).data).toEqual([]);
     expect((await anon().from("follows").select("*")).data).toEqual([]);
     // Logged-out visitors can still browse every sort (the homepage uses trending).
-    for (const sort of ["trending", "recent", "views", "downloads", "rating", "relevance"]) {
+    for (const sort of ["trending", "recent", "views", "likes", "downloads", "rating", "relevance"]) {
       expect((await anon().rpc("search_templates", { p_sort: sort, p_limit: 2 })).error, sort).toBeNull();
     }
     await other.client.from("follows").delete().eq("creator_id", creator.id);
@@ -497,6 +497,105 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     await moderator.client.rpc("admin_set_banned", { p_user_id: reviewer.id, p_banned: false });
     expect(await rating()).toMatchObject({ rating_count: 2 });
     expect((await reviewer.client.from("favorites").insert({ user_id: reviewer.id, template_id: l.id })).error).toBeNull();
+  });
+
+  describe("likes and creator points", () => {
+    /** A fresh creator with one approved listing, so points start at zero. */
+    async function approvedListing() {
+      await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
+      const owner = await user();
+      const l = await pendingListing(owner.id);
+      await owner.client.rpc("submit_template", { p_template_id: l.id });
+      await moderator.client.rpc("record_scan_result", {
+        p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+      });
+      const status = (await service().from("templates").select("publication_status").eq("id", l.id).single()).data?.publication_status;
+      expect(status).toBe("approved");
+      return { owner, listing: l };
+    }
+    const likeCount = async (id: string) => (await service().from("templates").select("like_count").eq("id", id).single()).data!.like_count;
+    const points = async (id: string) => (await service().from("profiles").select("points").eq("id", id).single()).data!.points;
+
+    it("like and unlike update the listing count and the creator's points", async () => {
+      const { owner, listing } = await approvedListing();
+      const fan = await user();
+      expect((await other.client.from("likes").insert({ user_id: other.id, template_id: listing.id })).error).toBeNull();
+      expect((await fan.client.from("likes").insert({ user_id: fan.id, template_id: listing.id })).error).toBeNull();
+      // One like per user and listing.
+      expect((await fan.client.from("likes").insert({ user_id: fan.id, template_id: listing.id })).error?.code).toBe("23505");
+      expect(await likeCount(listing.id)).toBe(2);
+      expect(await points(owner.id)).toBe(2);
+      // Counts are public, like rows are private to their owner.
+      expect((await anon().from("templates").select("like_count").eq("id", listing.id).single()).data?.like_count).toBe(2);
+      expect((await anon().from("profiles").select("points").eq("id", owner.id).single()).data?.points).toBe(2);
+      expect((await fan.client.from("likes").select("user_id").eq("template_id", listing.id)).data).toEqual([{ user_id: fan.id }]);
+      expect((await owner.client.from("likes").select("user_id").eq("template_id", listing.id)).data).toEqual([]);
+      // Nobody can remove someone else's like.
+      await owner.client.from("likes").delete().eq("template_id", listing.id);
+      expect(await likeCount(listing.id)).toBe(2);
+      // Likes appear in search and the "likes" sort works.
+      const found = await anon().rpc("search_templates", { p_creator: owner.id, p_sort: "likes" });
+      expect(found.error).toBeNull();
+      expect(found.data?.[0]).toMatchObject({ id: listing.id, like_count: 2 });
+
+      expect((await fan.client.from("likes").delete({ count: "exact" }).eq("user_id", fan.id).eq("template_id", listing.id)).count).toBe(1);
+      expect(await likeCount(listing.id)).toBe(1);
+      expect(await points(owner.id)).toBe(1);
+    });
+
+    it("no self likes, no likes on listings that are not public, no anonymous likes", async () => {
+      const { owner, listing } = await approvedListing();
+      expect((await owner.client.from("likes").insert({ user_id: owner.id, template_id: listing.id })).error).not.toBeNull();
+      // Liking in someone else's name.
+      expect((await other.client.from("likes").insert({ user_id: owner.id, template_id: listing.id })).error).not.toBeNull();
+      expect((await anon().from("likes").insert({ user_id: other.id, template_id: listing.id })).error).not.toBeNull();
+      expect((await anon().from("likes").select("*")).error).not.toBeNull();
+      const pending = await pendingListing(owner.id);
+      expect((await other.client.from("likes").insert({ user_id: other.id, template_id: pending.id })).error).not.toBeNull();
+      expect(await likeCount(listing.id)).toBe(0);
+      expect(await likeCount(pending.id)).toBe(0);
+      expect(await points(owner.id)).toBe(0);
+    });
+
+    it("clients cannot set like counts or points directly", async () => {
+      const { owner, listing } = await approvedListing();
+      expect((await owner.client.from("templates").update({ like_count: 999 } as never).eq("id", listing.id)).error).not.toBeNull();
+      expect((await owner.client.from("profiles").update({ points: 999 } as never).eq("id", owner.id)).error).not.toBeNull();
+      expect((await owner.client.rpc("refresh_points" as never, { p_user_id: owner.id } as never)).error).not.toBeNull();
+      expect((await owner.client.rpc("refresh_like_count" as never, { p_template_id: listing.id } as never)).error).not.toBeNull();
+      // An allowed profile edit leaves points alone.
+      expect((await owner.client.from("profiles").update({ bio: "points test" }).eq("id", owner.id)).error).toBeNull();
+      expect(await likeCount(listing.id)).toBe(0);
+      expect(await points(owner.id)).toBe(0);
+    });
+
+    it("suspended users' likes and removed listings stop counting", async () => {
+      const { owner, listing } = await approvedListing();
+      const fan = await user();
+      await other.client.from("likes").insert({ user_id: other.id, template_id: listing.id });
+      await fan.client.from("likes").insert({ user_id: fan.id, template_id: listing.id });
+      expect(await points(owner.id)).toBe(2);
+
+      await moderator.client.rpc("admin_set_banned", { p_user_id: fan.id, p_banned: true, p_reason: "spam" });
+      expect(await likeCount(listing.id)).toBe(1);
+      expect(await points(owner.id)).toBe(1);
+      await moderator.client.rpc("admin_set_banned", { p_user_id: fan.id, p_banned: false });
+      expect(await likeCount(listing.id)).toBe(2);
+      expect(await points(owner.id)).toBe(2);
+      await moderator.client.rpc("admin_set_banned", { p_user_id: fan.id, p_banned: true, p_reason: "spam" });
+      // A suspended account cannot like.
+      const another = await approvedListing();
+      expect((await fan.client.from("likes").insert({ user_id: fan.id, template_id: another.listing.id })).error).not.toBeNull();
+
+      // A removed listing gives no points; approving it again restores them.
+      expect((await moderator.client.rpc("moderate_template", { p_template_id: listing.id, p_action: "remove", p_reason: "copyright claim" })).error).toBeNull();
+      expect(await points(owner.id)).toBe(0);
+      expect((await moderator.client.rpc("moderate_template", { p_template_id: listing.id, p_action: "approve" })).error).toBeNull();
+      expect(await points(owner.id)).toBe(1);
+      // Deleting the listing takes its points with it.
+      await service().from("templates").delete().eq("id", listing.id);
+      expect(await points(owner.id)).toBe(0);
+    });
   });
 
   it("storage: upload URLs write a key once, quotas use real sizes, orphans are found", async () => {
