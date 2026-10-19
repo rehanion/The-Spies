@@ -35,7 +35,7 @@ Live: https://spies.spies-4082fd.workers.dev
 
 ## Stack
 
-- Next.js 16 (App Router, `middleware.ts`, not `proxy.ts`), React 19, Tailwind v4, Inter font, OpenNext on Cloudflare Workers Free (10 ms CPU per request, so keep heavy work out of the Worker).
+- Next.js 16 (App Router, `middleware.ts`, not `proxy.ts`), React 19, Tailwind v4, Inter font, OpenNext on Cloudflare Workers Free (10 ms CPU per request, so keep heavy work out of the Worker). Smart Placement is on, so the Worker runs near the database; run independent database calls with Promise.all.
 - Supabase Free: Postgres with RLS, Auth with Turnstile captcha, Storage, and the `process-upload` Edge Function (Deno), which does all file checks.
 - ClamAV runs in GitHub Actions (`scan.yml`, every 5 minutes, exits early when nothing is waiting). The scanner signs in as a normal user with `profiles.is_scanner = true` and can only read and score files waiting for a scan.
 - Logo: `src/components/logo.tsx`, white Fraunces Black Soft letter outlines. Favicon `src/app/icon.svg` says SPY.
