@@ -9,6 +9,7 @@
 //   node scripts/ci-setup.mjs supabase        Supabase URL/keys and derived secrets
 //   node scripts/ci-setup.mjs cloudflare      account, workers.dev URL, Turnstile widget
 //   node scripts/ci-setup.mjs configure       Auth settings, function secrets, scanner account
+//   node scripts/ci-setup.mjs dns             add DNS records listed in spies.deploy.json
 //   node scripts/ci-setup.mjs worker-secrets  write the Worker secrets to $WORKER_SECRETS_FILE (mode 600)
 //   node scripts/ci-setup.mjs scanner-login   one-time scanner login token, as a step output only
 //   node scripts/ci-setup.mjs pending         count files waiting for a scan
@@ -131,6 +132,33 @@ async function cloudflareEnv() {
   }
   exportEnv("NEXT_PUBLIC_TURNSTILE_SITE_KEY", widget.sitekey, { secret: false });
   exportEnv("TURNSTILE_SECRET_KEY", widget.secret);
+}
+
+// DNS records listed in spies.deploy.json "dns" (for example the ones Brevo asks
+// for), created in the Cloudflare zone "dnsZone" if missing. Needs the token
+// permission Zone DNS Edit for that zone. Never deletes or changes other records.
+async function dns() {
+  const records = config.dns ?? [];
+  if (!records.length || !config.dnsZone) return console.log("No DNS records to add");
+  const zones = await cf(`/zones?name=${encodeURIComponent(config.dnsZone)}`);
+  if (!zones?.length) throw new Error(`The token cannot see the Cloudflare zone ${config.dnsZone}. Give it Zone DNS Edit for that zone.`);
+  const zone = zones[0].id;
+  const existing = await cf(`/zones/${zone}/dns_records?per_page=500`);
+  const fqdn = (name) => (name === "@" || name === config.dnsZone ? config.dnsZone : name.endsWith(`.${config.dnsZone}`) ? name : `${name}.${config.dnsZone}`);
+  const norm = (v) => String(v).replace(/^"|"$/g, "").replace(/\.$/, "").toLowerCase();
+  let added = 0;
+  for (const r of records) {
+    const name = fqdn(r.name);
+    const type = r.type.toUpperCase();
+    const content = String(r.content).replace(/^"|"$/g, "");
+    if (existing.some((e) => e.type === type && e.name === name && norm(e.content) === norm(content))) continue;
+    await cf(`/zones/${zone}/dns_records`, {
+      method: "POST",
+      body: JSON.stringify({ type, name, content, ttl: 1, proxied: false, ...(r.priority != null ? { priority: r.priority } : {}) }),
+    });
+    added++;
+  }
+  console.log(`::notice::DNS: ${added} record(s) added, ${records.length - added} already there`);
 }
 
 const sql = (query) => sb(`/projects/${REF}/database/query`, { method: "POST", body: JSON.stringify({ query }) });
@@ -290,6 +318,7 @@ const steps = {
   supabase: supabaseEnv,
   cloudflare: cloudflareEnv,
   configure,
+  dns,
   "worker-secrets": workerSecrets,
   "scanner-login": scannerLogin,
   pending,
