@@ -1,6 +1,6 @@
 # SPIES
 
-Free community site for sharing trading templates for MotiveWave, Sierra Chart and Quantower.
+Free community site for sharing trading templates for MotiveWave, Sierra Chart, Quantower, ATAS and TradingView.
 
 Live: https://spies.spies-4082fd.workers.dev
 
@@ -55,11 +55,9 @@ Tests: `npm run check` (lint, types, unit tests, build), `npm run test:integrati
 
 Manual scanning: [docs/MANUAL_SCANNING.md](docs/MANUAL_SCANNING.md).
 
-## Adding a platform
+## Platforms and categories
 
-1. Insert it into `public.platforms` in a new migration.
-2. Add its file formats to `FORMATS` and `PLATFORM_FORMATS` in `supabase/functions/_shared/formats.ts`.
-3. Add its label and install hints in `src/lib/catalog.ts`.
+Admins add and edit them under Admin > Platforms & categories, including which file types each platform accepts. Listings with plugin files (.dll, .jar) always wait for a moderator. A new file type needs a check in `supabase/functions/_shared/formats.ts` first.
 
 ## License
 

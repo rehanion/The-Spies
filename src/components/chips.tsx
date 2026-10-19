@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { CATEGORY_LABELS, PLATFORM_LABELS } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 
 /** Horizontally scrolling filter chips, like the topic bar on video sites. */
-export function FilterChips({ active }: { active?: string }) {
+export async function FilterChips({ active }: { active?: string }) {
+  const catalog = await getCatalog();
   const chips: [string, string, string][] = [
     ["all", "All", "/"],
-    ...Object.entries(PLATFORM_LABELS).map(([id, l]) => [`p:${id}`, l, `/browse?platform=${id}`] as [string, string, string]),
-    ...Object.entries(CATEGORY_LABELS).map(([id, l]) => [`c:${id}`, l, `/browse?category=${id}`] as [string, string, string]),
+    ...catalog.platforms.map((x) => [`p:${x.id}`, x.name, `/browse?platform=${x.id}`] as [string, string, string]),
+    ...catalog.categories.map((x) => [`c:${x.id}`, x.name, `/browse?category=${x.id}`] as [string, string, string]),
   ];
   return (
     <nav aria-label="Topics" className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0">

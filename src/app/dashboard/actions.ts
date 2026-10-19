@@ -14,7 +14,7 @@ import { storage } from "@/lib/storage";
 import { unpublishPreviews } from "@/lib/previews";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { metadataFromForm } from "@/lib/validation/template";
-import { allowedUploadExtensions } from "@shared/formats.ts";
+import { getCatalog } from "@/lib/data/catalog";
 
 export type FormState = { ok: boolean; message: string; fieldErrors?: Record<string, string> } | null;
 
@@ -25,6 +25,21 @@ function fieldErrors(issues: { path: PropertyKey[]; message: string }[]): Record
     out[key] ??= i.message;
   }
   return out;
+}
+
+/** The platform must accept uploads and the category must exist. */
+async function checkCatalogChoice(
+  platformId: string,
+  categoryId: string,
+): Promise<{ ok: false; message: string; fieldErrors: Record<string, string> } | null> {
+  const catalog = await getCatalog();
+  if (!catalog.activePlatforms.some((x) => x.id === platformId)) {
+    return { ok: false, message: "Please fix the highlighted fields.", fieldErrors: { platform_id: "Choose a platform." } };
+  }
+  if (!catalog.hasCategory(categoryId)) {
+    return { ok: false, message: "Please fix the highlighted fields.", fieldErrors: { category_id: "Choose a category." } };
+  }
+  return null;
 }
 
 type CreateResult = { ok: true; id: string; slug: string } | { ok: false; message: string; fieldErrors?: Record<string, string> };
@@ -38,6 +53,8 @@ async function createTemplateRecord(formData: FormData): Promise<CreateResult> {
   if (!parsed.success) {
     return { ok: false, message: "Please fix the highlighted fields.", fieldErrors: fieldErrors(parsed.error.issues) };
   }
+  const catalogProblem = await checkCatalogChoice(parsed.data.platform_id, parsed.data.category_id);
+  if (catalogProblem) return catalogProblem;
   const captcha = await verifyTurnstile(formData.get("turnstileToken"), await clientIp());
   if (!captcha.ok) return { ok: false, message: captcha.message };
   if (!(await consumeRateLimit("createSubmission", viewer.userId))) {
@@ -85,6 +102,8 @@ export async function updateSubmission(_prev: FormState, formData: FormData): Pr
   if (!parsed.success) {
     return { ok: false, message: "Please fix the highlighted fields.", fieldErrors: fieldErrors(parsed.error.issues) };
   }
+  const catalogProblem = await checkCatalogChoice(parsed.data.platform_id, parsed.data.category_id);
+  if (catalogProblem) return catalogProblem;
   const supabase = await createClient();
   const { data: current } = await supabase
     .from("templates")
@@ -100,7 +119,7 @@ export async function updateSubmission(_prev: FormState, formData: FormData): Pr
       .select("extension")
       .eq("template_id", current.id)
       .eq("is_current", true);
-    const allowed = allowedUploadExtensions(parsed.data.platform_id);
+    const allowed = (await getCatalog()).rules(parsed.data.platform_id)?.upload ?? [];
     if ((files ?? []).some((f) => !allowed.includes(f.extension))) {
       return {
         ok: false,
@@ -134,15 +153,16 @@ export async function submitForReview(templateId: string): Promise<FormState> {
   if (error) return { ok: false, message: error.message };
   revalidatePath(`/dashboard/submissions/${templateId}`);
   revalidatePath("/dashboard");
-  const [{ data: after }, { data: settings }] = await Promise.all([
+  const [{ data: after }, { data: settings }, { count: codeFiles }] = await Promise.all([
     supabase.from("templates").select("publication_status").eq("id", templateId).single(),
     supabase.from("site_settings").select("auto_publish").eq("id", 1).maybeSingle(),
+    supabase.from("template_files").select("id", { count: "exact", head: true }).eq("template_id", templateId).eq("is_current", true).eq("contains_code", true),
   ]);
   return {
     ok: true,
     message: after?.publication_status === "approved"
       ? "Published! Your template is live."
-      : settings?.auto_publish === false
+      : settings?.auto_publish === false || (codeFiles ?? 0) > 0
         ? "Submitted. A moderator will review it after the virus scan."
         : "Submitted. It goes live automatically as soon as the virus scan has passed.",
   };
@@ -179,14 +199,18 @@ export async function deleteSubmission(templateId: string): Promise<FormState> {
   const admin = createAdminClient();
   const [{ data: files }, { data: shots }] = await Promise.all([
     admin.from("template_files").select("storage_key").eq("template_id", t.id),
-    admin.from("template_screenshots").select("original_key, public_key, thumb_key").eq("template_id", t.id),
+    admin.from("template_screenshots").select("original_bucket, original_key, public_key, thumb_key").eq("template_id", t.id),
   ]);
   const { error, count } = await supabase.from("templates").delete({ count: "exact" }).eq("id", t.id);
   if (error || !count) return { ok: false, message: "Could not delete the submission." };
   await storage.remove("quarantine", [
     ...(files ?? []).map((f) => f.storage_key),
-    ...(shots ?? []).map((s) => s.original_key),
+    ...(shots ?? []).filter((s) => s.original_bucket === "quarantine").map((s) => s.original_key),
   ]);
+  await storage.remove(
+    "screenshot-uploads",
+    (shots ?? []).filter((s) => s.original_bucket !== "quarantine").map((s) => s.original_key),
+  );
   await storage.remove(
     "previews",
     (shots ?? []).flatMap((s) => [s.public_key, s.thumb_key]).filter((k): k is string => !!k),

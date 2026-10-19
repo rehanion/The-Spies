@@ -1,5 +1,7 @@
+"use client";
+
 import type { Database } from "@/lib/database.types";
-import { categoryLabel, platformLabel } from "@/lib/catalog";
+import { useCatalog } from "@/components/catalog-provider";
 
 type Tone = "neutral" | "accent" | "ok" | "warn" | "danger" | "info";
 
@@ -24,11 +26,11 @@ export function Badge({ tone = "neutral", children, title }: { tone?: Tone; chil
 }
 
 export function PlatformBadge({ platformId }: { platformId: string }) {
-  return <Badge tone="neutral">{platformLabel(platformId)}</Badge>;
+  return <Badge tone="neutral">{useCatalog().platformName(platformId)}</Badge>;
 }
 
 export function CategoryBadge({ categoryId }: { categoryId: string }) {
-  return <Badge tone="neutral">{categoryLabel(categoryId)}</Badge>;
+  return <Badge tone="neutral">{useCatalog().categoryName(categoryId)}</Badge>;
 }
 
 export function DemoBadge() {

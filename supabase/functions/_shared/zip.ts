@@ -5,7 +5,7 @@
 
 import { Inflate } from "fflate";
 import { crc32 } from "./hash.ts";
-import { FORBIDDEN_CONTENT, describeSniffed, sniff } from "./magic.ts";
+import { FORBIDDEN_CONTENT, describeSniffed, sniff, type Sniffed } from "./magic.ts";
 import { extensionOf } from "./formats.ts";
 
 export interface ZipLimits {
@@ -92,11 +92,17 @@ function inflateCapped(data: Uint8Array, expected: number): Uint8Array {
   return out;
 }
 
+export interface ZipCodeRules {
+  /** Inner extensions allowed to hold compiled code, with the content type each must be. */
+  code?: Record<string, Sniffed>;
+}
+
 export function inspectZip(
   data: Uint8Array,
   limits: ZipLimits,
-  allowedInnerExtensions: string[],
+  allowedInnerExtensions: string[] | "any",
   checkInner?: (name: string, ext: string, content: Uint8Array) => string | null,
+  rules: ZipCodeRules = {},
 ): ZipResult {
   try {
     if (data.length < 22) fail("The archive is too small to be a valid ZIP file.");
@@ -157,7 +163,9 @@ export function inspectZip(
       if (method !== 0 && method !== 8) fail("The archive uses an unsupported compression method.");
       const ext = extensionOf(name);
       if (["zip", "jar", "7z", "rar", "gz", "tar", "cab", "iso"].includes(ext)) fail(`Nested archives are not accepted (${name}).`);
-      if (!allowedInnerExtensions.includes(ext)) fail(`"${name}" is not an allowed file type inside a package. Allowed: ${allowedInnerExtensions.map((e) => "." + e).join(", ")}.`);
+      if (allowedInnerExtensions !== "any" && !allowedInnerExtensions.includes(ext)) {
+        fail(`"${name}" is not an allowed file type inside a package. Allowed: ${allowedInnerExtensions.map((e) => "." + e).join(", ")}.`);
+      }
       if (uncompSize > 0 && compSize === 0) fail("An entry has an impossible compression ratio (possible ZIP bomb).");
       if (compSize > 0 && uncompSize / compSize > limits.maxCompressionRatio) fail("An entry is compressed suspiciously well (possible ZIP bomb).");
       total += uncompSize;
@@ -178,7 +186,12 @@ export function inspectZip(
       const content = method === 0 ? (compSize === uncompSize ? raw : fail("A stored entry has inconsistent sizes.")) : inflateCapped(raw, uncompSize);
       if (crc32(content) !== crc) fail(`"${name}" failed its CRC check (corrupt archive).`);
       const kind = sniff(content);
-      if (kind === "zip" || FORBIDDEN_CONTENT.has(kind)) fail(`"${name}" contains ${describeSniffed(kind)}, which is not accepted.`);
+      const expectedCode = rules.code?.[ext];
+      if (expectedCode) {
+        if (kind !== expectedCode) fail(`"${name}" is not a valid .${ext} file.`);
+      } else if (kind === "zip" || FORBIDDEN_CONTENT.has(kind)) {
+        fail(`"${name}" contains ${describeSniffed(kind)}, which is not accepted.`);
+      }
       if (checkInner) {
         const problem = checkInner(name, ext, content);
         if (problem) fail(problem);

@@ -7,6 +7,7 @@ import { storage } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { UploadError, checkQuotas, precheckUpload } from "@/lib/uploads";
+import { getCatalog } from "@/lib/data/catalog";
 
 const bodySchema = z.object({
   templateId: z.uuid(),
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { filename, extension } = precheckUpload(body, template.platform_id);
+    const { filename, extension } = precheckUpload(body, (await getCatalog()).rules(template.platform_id));
     await checkQuotas(viewer.userId, body.size);
     const admin = createAdminClient();
     const l = limits();
@@ -110,12 +111,13 @@ export async function POST(request: NextRequest) {
       id,
       template_id: template.id,
       uploader_id: viewer.userId,
+      original_bucket: "screenshot-uploads",
       original_key: key,
       declared_size_bytes: body.size,
       position,
     });
     if (insertError) throw new UploadError("The upload could not be reserved.", 500, "db_error");
-    const signed = await storage.createUploadUrl("quarantine", key);
+    const signed = await storage.createUploadUrl("screenshot-uploads", key);
     return NextResponse.json({ id, kind: "screenshot", uploadUrl: signed.signedUrl });
   } catch (e) {
     if (e instanceof UploadError) return error(e);

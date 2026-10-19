@@ -63,7 +63,7 @@ export async function getTemplateBySlug(slug: string) {
     supabase
       .from("template_files")
       .select(
-        "id, original_filename, extension, size_bytes, declared_size_bytes, sha256, detected_format, validation_status, validation_report, scan_status, scanned_at, scanner_name, scanner_version, signature_version, scanned_sha256, approved_sha256, is_current, created_at",
+        "id, original_filename, extension, size_bytes, declared_size_bytes, sha256, detected_format, validation_status, validation_report, scan_status, scanned_at, scanner_name, scanner_version, signature_version, scanned_sha256, approved_sha256, is_current, contains_code, created_at",
       )
       .eq("template_id", template.id)
       .eq("is_current", true)

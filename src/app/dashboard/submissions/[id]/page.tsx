@@ -13,7 +13,7 @@ import { Notice } from "@/components/empty-state";
 import { MetadataForm } from "@/components/upload/metadata-form";
 import { FilesManager, type ManagedFile } from "@/components/upload/files-manager";
 import { ScreenshotsManager } from "@/components/upload/screenshots-manager";
-import { allowedUploadExtensions } from "@shared/formats.ts";
+import { getCatalog } from "@/lib/data/catalog";
 import { updateSubmission } from "../../actions";
 import { SubmissionActions } from "./submission-actions";
 
@@ -110,7 +110,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
         <FilesManager
           templateId={t.id}
           files={fileList}
-          accept={allowedUploadExtensions(t.platform_id)}
+          accept={(await getCatalog()).rules(t.platform_id)?.upload ?? []}
           maxBytes={l.maxTemplateFileBytes}
           maxFiles={l.maxFilesPerTemplate}
           disabled={removed ? "Removed listings cannot be changed." : null}
@@ -147,7 +147,7 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
         {removed ? (
           <p className="text-sm text-fg-subtle">Removed listings cannot be edited.</p>
         ) : (
-          <MetadataForm action={updateSubmission} values={{ ...t, id: t.id }} submitLabel="Save changes" platformHints={platformHints()} />
+          <MetadataForm action={updateSubmission} values={{ ...t, id: t.id }} submitLabel="Save changes" platformHints={await platformHints()} />
         )}
       </section>
     </div>

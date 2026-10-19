@@ -1,13 +1,17 @@
 # Automatic ClamAV scanning on GitHub's free runners, every 5 minutes (GitHub
-# may start scheduled runs a few minutes late) and on demand. When nothing is
-# waiting it stops after one database query. Otherwise it downloads waiting
-# files with a dedicated moderator account, scans them with up-to-date ClamAV
+# may start scheduled runs a few minutes late) and on demand. Each run also
+# removes stale upload reservations and stored objects no record needs. When
+# no file is waiting it stops after that. Otherwise it downloads waiting files
+# with the dedicated scanner account, scans them with up-to-date ClamAV
 # signatures and records the result.
 # With auto-publish on, clean listings go live right after this job.
 #
-# Needs the SUPABASE_ACCESS_TOKEN repository secret. The scanner signs in as
-# the moderator account that the Deploy workflow creates, with a one-time login
-# token; the scanning step itself never holds a key that bypasses Row Level Security.
+# Needs the SUPABASE_ACCESS_TOKEN repository secret, which only the steps that
+# run scripts/ci-setup.mjs (Node.js built-ins, no dependencies) receive. The
+# scanner account is not a moderator: it can only read files waiting for a
+# scan and record a first result. It signs in with a one-time login token that
+# is created after every install step and handed only to the scan step.
+# The repository is public, so its logs show only ids and counts.
 name: Virus scan
 
 on:
@@ -33,29 +37,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check for files waiting for a scan
+      - name: Check for files waiting for a scan and clean up storage
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/ci-setup.mjs pending
+        run: node scripts/ci-setup.mjs pending cleanup
 
-      - name: Look up the scanner login
+      # The locked dependency versions, without install scripts, before any
+      # login exists. The website is not built here.
+      - name: Install scanner dependencies (no secrets present)
         if: env.SPIES_PENDING != '0'
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          node scripts/ci-setup.mjs supabase scanner-login
-          # The scanner only needs its own one-time login; drop the server key and password.
-          echo "SPIES_ADMIN_PASSWORD=" >> "$GITHUB_ENV"
-          echo "SUPABASE_SECRET_KEY=" >> "$GITHUB_ENV"
-          echo "PROCESSOR_SECRET=" >> "$GITHUB_ENV"
-          echo "ACTOR_HASH_SALT=" >> "$GITHUB_ENV"
-
-      # Only the script's one dependency is installed; the website is not built here.
-      - name: Install scanner dependencies
-        if: env.SPIES_PENDING != '0'
-        run: |
-          mkdir -p /tmp/scanner && cp scripts/admin-scan.mjs /tmp/scanner/
-          cd /tmp/scanner && npm init -y >/dev/null && npm install --no-audit --no-fund @supabase/supabase-js@2.118.0
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Install ClamAV
         if: env.SPIES_PENDING != '0'
@@ -80,7 +71,17 @@ jobs:
           sudo freshclam --stdout
           sudo cp /var/lib/clamav/*.c?d /tmp/clamav-db/ && sudo chown -R "$USER" /tmp/clamav-db
 
+      # Only Node.js built-ins run here. The token is a masked step output for
+      # the next step only, never written to $GITHUB_ENV.
+      - name: Create a one-time scanner login
+        id: login
+        if: env.SPIES_PENDING != '0'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/ci-setup.mjs supabase scanner-login
+
       - name: Scan pending files
         if: env.SPIES_PENDING != '0'
-        working-directory: /tmp/scanner
-        run: node admin-scan.mjs --limit 100
+        env:
+          SPIES_ADMIN_TOKEN_HASH: ${{ steps.login.outputs.token_hash }}
+        run: node scripts/admin-scan.mjs --limit 100

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BLOCKED_REASONS, FORMATS, PLATFORM_FORMATS } from "@shared/formats.ts";
-import { PLATFORM_LABELS } from "@/lib/catalog";
+import { BLOCKED_REASONS, FORMATS } from "@shared/formats.ts";
+import { getCatalog } from "@/lib/data/catalog";
 import { limits } from "@/lib/server-env";
 import { formatBytes } from "@/lib/format";
 
 export const metadata: Metadata = { title: "How files are checked" };
 
-export default function SecurityPage() {
+export default async function SecurityPage() {
+  const catalog = await getCatalog();
   const l = limits();
   return (
     <article className="prose-plain mx-auto max-w-3xl space-y-6 px-4 py-8 text-sm leading-6 text-fg-muted">
@@ -39,6 +40,11 @@ export default function SecurityPage() {
           site to manual approval instead). Moderators review reports and remove listings, comments or accounts that break the rules.
         </li>
         <li>
+          <strong className="text-fg">Compiled plugins.</strong> Some platforms use plugins (.dll or .jar files) that run code on your computer when the
+          platform loads them. These are checked to be real plugins, not programs, and scanned like everything else, and a moderator always looks at the
+          listing before it goes live. A scan cannot prove code is safe, so only install plugins from creators you trust.
+        </li>
+        <li>
           <strong className="text-fg">Controlled download.</strong> Downloads use short-lived links that are only issued while the listing is approved, the
           scan is clean and the file&apos;s fingerprint still matches what was scanned and approved. Replacing a file takes the listing offline until the new file has been scanned.
         </li>
@@ -60,10 +66,10 @@ export default function SecurityPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold text-fg">Accepted formats</h2>
         <ul className="list-disc space-y-1 pl-5">
-          {Object.entries(PLATFORM_FORMATS).map(([id, f]) => (
-            <li key={id}>
-              <span className="text-fg">{PLATFORM_LABELS[id] ?? id}:</span> {f.upload.map((e) => FORMATS[e]?.label ?? e).join(", ")}. ZIP packages may contain{" "}
-              {f.zipInner.map((e) => `.${e}`).join(", ")}.
+          {catalog.activePlatforms.map((x) => (
+            <li key={x.id}>
+              <span className="text-fg">{x.name}:</span> {x.upload_formats.map((e) => FORMATS[e]?.label ?? e).join(", ")}.
+              {x.zip_formats.length ? ` ZIP packages may contain ${x.zip_formats.map((e) => `.${e}`).join(", ")}.` : null}
             </li>
           ))}
         </ul>

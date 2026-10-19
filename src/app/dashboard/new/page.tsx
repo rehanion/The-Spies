@@ -33,7 +33,7 @@ export default async function NewSubmissionPage() {
             values={EMPTY_METADATA}
             submitLabel="Save and continue"
             turnstile={{ siteKey: publicEnv.turnstileSiteKey(), nonce: await getNonce() }}
-            platformHints={platformHints()}
+            platformHints={await platformHints()}
           />
         </div>
       )}

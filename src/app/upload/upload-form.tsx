@@ -5,18 +5,19 @@ import { useMemo, useRef, useState } from "react";
 import { createUploadDraft, submitForReview } from "@/app/dashboard/actions";
 import { completeUpload, putWithProgress, reserveUpload } from "@/components/upload/direct-upload";
 import { Turnstile } from "@/components/turnstile";
-import { CATEGORY_LABELS, LICENSES, PLATFORM_LABELS } from "@/lib/catalog";
+import { LICENSES, type CatalogPlatform } from "@/lib/catalog";
+import { useCatalog } from "@/components/catalog-provider";
 import { formatBytes } from "@/lib/format";
-import { PLATFORM_FORMATS, extensionOf } from "@shared/formats.ts";
+import { extensionOf } from "@shared/formats.ts";
 
 type Step = { label: string; state: "waiting" | "working" | "done" | "error"; progress?: number; message?: string };
 
 // Guess the platform from the first file's extension (ZIPs fit several platforms).
-function guessPlatform(files: File[]): string | null {
+function guessPlatform(files: File[], platforms: CatalogPlatform[]): string | null {
   for (const f of files) {
     const ext = extensionOf(f.name);
-    const matches = Object.entries(PLATFORM_FORMATS).filter(([, fmt]) => fmt.upload.includes(ext) && ext !== "zip");
-    if (matches.length === 1) return matches[0][0];
+    const matches = platforms.filter((x) => x.upload_formats.includes(ext) && ext !== "zip");
+    if (matches.length === 1) return matches[0].id;
   }
   return null;
 }
@@ -55,14 +56,17 @@ export function UploadForm({
   const [captchaKey, setCaptchaKey] = useState(0);
 
   const shotPreviews = useMemo(() => shots.map((f) => ({ name: f.name, url: URL.createObjectURL(f) })), [shots]);
-  const accepted = platform ? PLATFORM_FORMATS[platform]?.upload ?? [] : Array.from(new Set(Object.values(PLATFORM_FORMATS).flatMap((f) => f.upload)));
+  const catalog = useCatalog();
+  const accepted = platform
+    ? catalog.platform(platform)?.upload_formats ?? []
+    : Array.from(new Set(catalog.activePlatforms.flatMap((x) => x.upload_formats)));
 
   function addFiles(list: FileList | null) {
     const incoming = Array.from(list ?? []);
     const next = [...files, ...incoming].slice(0, maxFiles);
     setFiles(next);
     if (!platform) {
-      const guess = guessPlatform(next);
+      const guess = guessPlatform(next, catalog.activePlatforms);
       if (guess) setPlatform(guess);
     }
     if (!title && next[0]) setTitle(titleFromFilename(next[0].name));
@@ -77,7 +81,7 @@ export function UploadForm({
     if (!shots.length) return "Add at least one screenshot so people can see what it looks like.";
     for (const f of files) {
       const ext = extensionOf(f.name);
-      if (!accepted.includes(ext)) return `${f.name}: .${ext || "?"} files are not accepted${platform ? ` for ${PLATFORM_LABELS[platform]}` : ""}.`;
+      if (!accepted.includes(ext)) return `${f.name}: .${ext || "?"} files are not accepted${platform ? ` for ${catalog.platformName(platform)}` : ""}.`;
       if (f.size > maxFileBytes) return `${f.name} is larger than ${formatBytes(maxFileBytes)}.`;
     }
     for (const s of shots) {
@@ -243,7 +247,7 @@ export function UploadForm({
               <label htmlFor="platform_id" className="label">Platform</label>
               <select id="platform_id" name="platform_id" required value={platform} onChange={(e) => setPlatform(e.target.value)} className="input">
                 <option value="">Choose…</option>
-                {Object.entries(PLATFORM_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                {catalog.activePlatforms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
               {err("platform_id")}
             </div>
@@ -251,7 +255,7 @@ export function UploadForm({
               <label htmlFor="category_id" className="label">Category</label>
               <select id="category_id" name="category_id" required defaultValue="" className="input">
                 <option value="" disabled>Choose…</option>
-                {Object.entries(CATEGORY_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                {catalog.categories.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
               {err("category_id")}
             </div>

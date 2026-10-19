@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 // Prepares the hosted services for a GitHub Actions run. Only two repository
 // secrets are needed, SUPABASE_ACCESS_TOKEN and (for deploys) CLOUDFLARE_API_TOKEN;
-// everything else is looked up or derived here and exported to later steps
-// through $GITHUB_ENV, masked in the logs.
+// everything else is looked up or derived here. Public values are exported to
+// later steps through $GITHUB_ENV. Secret values are never exported: each step
+// that needs one derives it again in its own process, so build tools and
+// dependencies in other steps never see them.
 //
-//   node scripts/ci-setup.mjs supabase    Supabase URL/keys, derived secrets, scanner login
-//   node scripts/ci-setup.mjs cloudflare  account, workers.dev URL, Turnstile widget
-//   node scripts/ci-setup.mjs configure   Auth settings, function secrets, scanner account
-//   node scripts/ci-setup.mjs scanner-login  one-time login token for the scan job
-//   node scripts/ci-setup.mjs pending     count files waiting for a scan
+//   node scripts/ci-setup.mjs supabase        Supabase URL/keys and derived secrets
+//   node scripts/ci-setup.mjs cloudflare      account, workers.dev URL, Turnstile widget
+//   node scripts/ci-setup.mjs configure       Auth settings, function secrets, scanner account
+//   node scripts/ci-setup.mjs worker-secrets  write the Worker secrets to $WORKER_SECRETS_FILE (mode 600)
+//   node scripts/ci-setup.mjs scanner-login   one-time scanner login token, as a step output only
+//   node scripts/ci-setup.mjs pending         count files waiting for a scan
+//   node scripts/ci-setup.mjs cleanup         delete stale upload reservations and unused stored objects
 //
+// This script uses only Node.js built-ins, so it runs before any dependency
+// is installed.
 // No step here can enable billing: it only reads keys, creates a Turnstile
 // widget (free) and a Supabase "secret" API key, and changes settings.
 import { createHmac } from "node:crypto";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 const config = JSON.parse(readFileSync(new URL("../spies.deploy.json", import.meta.url), "utf8"));
 const REF = config.supabaseProjectRef;
@@ -26,10 +32,11 @@ function need(name) {
   return v;
 }
 
+// Secrets stay in this process; only public values go to later steps.
 function exportEnv(name, value, { secret = true } = {}) {
   if (secret) console.log(`::add-mask::${value}`);
   process.env[name] = value;
-  if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+  if (!secret && process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
 }
 
 async function call(base, token, path, init = {}) {
@@ -48,7 +55,7 @@ const cf = async (path, init) => (await call(CF_API, need("CLOUDFLARE_API_TOKEN"
 // the Edge Function and the scanner agree without storing extra secrets.
 const derive = (label) => createHmac("sha256", process.env.SUPABASE_SECRET_KEY).update(`spies:${label}`).digest("hex");
 
-async function supabaseEnv() {
+async function supabaseKeys() {
   let keys = await sb(`/projects/${REF}/api-keys?reveal=true`);
   const publishable = keys.find((k) => k.type === "publishable")?.api_key;
   let secret = keys.find((k) => k.type === "secret" && k.name === "spies_server")?.api_key;
@@ -58,6 +65,11 @@ async function supabaseEnv() {
     secret = keys.find((k) => k.type === "secret" && k.name === "spies_server")?.api_key;
   }
   if (!publishable || !secret?.startsWith("sb_secret_")) throw new Error("Could not read the project's publishable and secret API keys.");
+  return { publishable, secret };
+}
+
+async function supabaseEnv() {
+  const { publishable, secret } = await supabaseKeys();
   exportEnv("NEXT_PUBLIC_SUPABASE_URL", `https://${REF}.supabase.co`, { secret: false });
   exportEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", publishable, { secret: false });
   exportEnv("SUPABASE_SECRET_KEY", secret);
@@ -160,7 +172,7 @@ async function configure() {
   });
   console.log("Edge Function secrets updated");
 
-  // The scanner signs in like a person, as a moderator, so GitHub never holds a key that bypasses RLS.
+  // The scanner signs in like a person, so the scan job never holds a key that bypasses RLS.
   const url = need("NEXT_PUBLIC_SUPABASE_URL");
   const key = need("SUPABASE_SECRET_KEY");
   const admin = (path, init) => call(url, key, `/auth/v1/admin${path}`, { ...init, headers: { apikey: key } });
@@ -171,11 +183,22 @@ async function configure() {
   if (id) await admin(`/users/${id}`, { method: "PUT", body: JSON.stringify({ password, ban_duration: "none" }) });
   else id = (await admin("/users", { method: "POST", body: JSON.stringify({ email, password, email_confirm: true, user_metadata: { username: "spies_scanner" } }) })).id;
   if (!/^[0-9a-f-]{36}$/.test(id)) throw new Error("Unexpected scanner user id");
-  await sql(`update public.profiles set role = 'moderator', is_banned = false where id = '${id}'`);
+  // Least privilege: not staff, only the scanner flag (read waiting files, record a first scan result).
+  await sql(`update public.profiles set role = 'user', is_scanner = true, is_banned = false where id = '${id}'`);
   console.log("Scanner account ready");
 }
 
-// A one-time login for the scanner account, so the scan job never runs with the secret key.
+// The Worker's runtime secrets, written to a private file for `wrangler deploy --secrets-file`.
+async function workerSecrets() {
+  const file = need("WORKER_SECRETS_FILE");
+  const keys = ["SUPABASE_SECRET_KEY", "PROCESSOR_SECRET", "ACTOR_HASH_SALT", "TURNSTILE_SECRET_KEY"];
+  writeFileSync(file, JSON.stringify(Object.fromEntries(keys.map((k) => [k, need(k)]))), { mode: 0o600 });
+  console.log("Worker secrets file written");
+}
+
+// A one-time login for the scanner account, so the scan job never runs with
+// the secret key or the access token. It is handed only to the scan step, as
+// a masked step output (never through $GITHUB_ENV).
 async function scannerLogin() {
   const url = need("NEXT_PUBLIC_SUPABASE_URL");
   const key = need("SUPABASE_SECRET_KEY");
@@ -186,7 +209,9 @@ async function scannerLogin() {
   });
   const hash = link.hashed_token ?? link.properties?.hashed_token;
   if (!hash) throw new Error("Could not create a scanner login token.");
-  exportEnv("SPIES_ADMIN_TOKEN_HASH", hash);
+  console.log(`::add-mask::${hash}`);
+  if (!process.env.GITHUB_OUTPUT) throw new Error("scanner-login only runs inside GitHub Actions.");
+  appendFileSync(process.env.GITHUB_OUTPUT, `token_hash=${hash}\n`);
 }
 
 // How many files wait for a scan, so the frequent scan job can stop early when there are none.
@@ -199,7 +224,48 @@ async function pending() {
   exportEnv("SPIES_PENDING", String(n), { secret: false });
 }
 
-const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure, "scanner-login": scannerLogin, pending };
+// Removes upload reservations that never completed and stored objects that no
+// record needs (for example a re-upload to a key that was already processed).
+// Logs only counts: Actions logs of a public repository are public.
+async function cleanup() {
+  const [stale] = await sql("select files, screenshots, avatars from public.cleanup_stale_uploads()");
+  const orphans = await sql("select bucket_id, name from public.storage_orphans()");
+  console.log(`Removed ${stale?.files ?? 0} file, ${stale?.screenshots ?? 0} screenshot and ${stale?.avatars ?? 0} avatar reservation(s)`);
+  if (!orphans.length) {
+    console.log("No unused stored objects");
+    return;
+  }
+  // Objects must be deleted through the Storage API, which needs the secret key.
+  // It is looked up here and never leaves this process.
+  const { secret } = await supabaseKeys();
+  console.log(`::add-mask::${secret}`);
+  const url = `https://${REF}.supabase.co`;
+  const byBucket = new Map();
+  for (const o of orphans) byBucket.set(o.bucket_id, [...(byBucket.get(o.bucket_id) ?? []), o.name]);
+  let removed = 0;
+  for (const [bucket, names] of byBucket) {
+    for (let i = 0; i < names.length; i += 100) {
+      const batch = names.slice(i, i + 100);
+      await call(url, secret, `/storage/v1/object/${encodeURIComponent(bucket)}`, {
+        method: "DELETE",
+        headers: { apikey: secret },
+        body: JSON.stringify({ prefixes: batch }),
+      });
+      removed += batch.length;
+    }
+  }
+  console.log(`Removed ${removed} unused stored object(s)`);
+}
+
+const steps = {
+  supabase: supabaseEnv,
+  cloudflare: cloudflareEnv,
+  configure,
+  "worker-secrets": workerSecrets,
+  "scanner-login": scannerLogin,
+  pending,
+  cleanup,
+};
 // Several steps can run in one call (later steps see earlier exports).
 const names = process.argv.slice(2);
 if (!names.length || names.some((n) => !steps[n])) {

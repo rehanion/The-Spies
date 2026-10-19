@@ -9,6 +9,7 @@ const bodySchema = z.object({ key: z.string().max(200) });
 export async function POST(request: NextRequest) {
   const viewer = await getViewer();
   if (!viewer?.profile) return NextResponse.json({ message: "Sign in first." }, { status: 401 });
+  if (viewer.profile.is_banned) return NextResponse.json({ message: "Your account is suspended." }, { status: 403 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   // The key must be one this user could have reserved; the processor checks it again.
   if (!parsed.success || !new RegExp(`^avatars/${viewer.userId}/[0-9a-f-]{36}\\.bin$`).test(parsed.data.key)) {

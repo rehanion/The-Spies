@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { CATEGORY_LABELS, LICENSES, PLATFORM_LABELS } from "@/lib/catalog";
+import { LICENSES } from "@/lib/catalog";
 
-const platformIds = Object.keys(PLATFORM_LABELS) as [string, ...string[]];
-const categoryIds = Object.keys(CATEGORY_LABELS) as [string, ...string[]];
+// Platform and category ids are checked against the database (foreign keys and
+// the active platform trigger); here only their shape is validated.
+const catalogId = (message: string) => z.string({ message }).regex(/^[a-z0-9-]{2,32}$/, message);
 const licenseIds = Object.keys(LICENSES) as [string, ...string[]];
 
 export function parseTags(raw: string): string[] {
@@ -20,9 +21,9 @@ export const templateMetadataSchema = z
     title: z.string().trim().min(3, "Title must be at least 3 characters.").max(120, "Title must be at most 120 characters."),
     summary: text(280),
     description: text(10000),
-    platform_id: z.enum(platformIds, { message: "Choose a platform." }),
+    platform_id: catalogId("Choose a platform."),
     platform_version: text(60),
-    category_id: z.enum(categoryIds, { message: "Choose a category." }),
+    category_id: catalogId("Choose a category."),
     tags: z.string().max(400).transform(parseTags),
     dependencies: text(2000),
     install_steps: text(5000),

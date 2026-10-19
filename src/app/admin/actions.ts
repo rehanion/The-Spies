@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getViewer, isAdmin, isStaff } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { storage } from "@/lib/storage";
+import { cleanupStorage } from "@/lib/storage-cleanup";
 import { unpublishPreviews } from "@/lib/previews";
+import { invalidateCatalog } from "@/lib/data/catalog";
 
 export type AdminState = { ok: boolean; message: string } | null;
 
@@ -143,30 +143,23 @@ export async function setUserBanned(_prev: AdminState, formData: FormData): Prom
   return error ? { ok: false, message: error.message } : { ok: true, message: parsed.data.banned === "true" ? "User suspended." : "Suspension lifted." };
 }
 
-/** Deletes upload reservations that never completed (older than 24h) and frees their quota. */
+/** Deletes stale upload reservations and orphaned objects, and frees their quota. */
 export async function cleanupStaleUploads(): Promise<AdminState> {
   const viewer = await getViewer();
   if (!isStaff(viewer)) return { ok: false, message: "Staff only." };
   const supabase = await createClient();
   const { data: staff } = await supabase.rpc("is_staff");
   if (!staff) return { ok: false, message: "Staff only." };
-  const admin = createAdminClient();
-  const cutoff = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const [{ data: files }, { data: shots }] = await Promise.all([
-    admin.from("template_files").select("id, storage_key").eq("validation_status", "pending").lt("created_at", cutoff).limit(500),
-    admin.from("template_screenshots").select("id, original_key").eq("status", "pending").lt("created_at", cutoff).limit(500),
-  ]);
-  await storage.remove("quarantine", [...(files ?? []).map((f) => f.storage_key), ...(shots ?? []).map((s) => s.original_key)]);
-  if (files?.length) await admin.from("template_files").delete().in("id", files.map((f) => f.id));
-  if (shots?.length) await admin.from("template_screenshots").delete().in("id", shots.map((s) => s.id));
-  await admin.rpc("log_event", {
-    p_action: "maintenance:cleanup_stale_uploads",
-    p_template_id: null as unknown as string,
-    p_file_id: null as unknown as string,
-    p_details: { files: files?.length ?? 0, screenshots: shots?.length ?? 0, actor: viewer!.userId },
-  });
-  revalidatePath("/admin");
-  return { ok: true, message: `Removed ${files?.length ?? 0} stale file reservations and ${shots?.length ?? 0} screenshots.` };
+  try {
+    const r = await cleanupStorage();
+    revalidatePath("/admin");
+    return {
+      ok: true,
+      message: `Removed ${r.files} stale file reservations, ${r.screenshots} screenshots, ${r.avatars} avatar reservations and ${r.orphans} unused stored objects.`,
+    };
+  } catch {
+    return { ok: false, message: "The cleanup could not run. Try again later." };
+  }
 }
 
 export async function setAutoPublish(enabled: boolean): Promise<AdminState> {
@@ -177,4 +170,91 @@ export async function setAutoPublish(enabled: boolean): Promise<AdminState> {
   if (error) return { ok: false, message: "Could not change the setting." };
   revalidatePath("/admin");
   return { ok: true, message: enabled ? "Uploads now go live automatically after a clean scan." : "Uploads now wait for your approval." };
+}
+
+const catalogId = z.string().trim().toLowerCase().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use lowercase letters, numbers and single hyphens.").min(2).max(32);
+const formatList = (v: FormDataEntryValue[]) => v.map(String).filter((x) => /^[a-z0-9]{1,16}$/.test(x));
+
+export async function savePlatform(_prev: AdminState, formData: FormData): Promise<AdminState> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) return { ok: false, message: "Admins only." };
+  const parsed = z
+    .object({
+      id: catalogId,
+      name: z.string().trim().min(2, "Name is too short.").max(40),
+      website: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(200)]),
+      description: z.string().trim().max(300),
+      install_hint: z.string().trim().max(500),
+      sort_order: z.coerce.number().int().min(0).max(1000),
+    })
+    .safeParse({
+      id: formData.get("id"),
+      name: formData.get("name"),
+      website: String(formData.get("website") ?? "").trim(),
+      description: formData.get("description") ?? "",
+      install_hint: formData.get("install_hint") ?? "",
+      sort_order: formData.get("sort_order") || 100,
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
+  const upload = formatList(formData.getAll("upload_formats"));
+  const zip = formatList(formData.getAll("zip_formats"));
+  if (!upload.length) return { ok: false, message: "Choose at least one file type." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_save_platform", {
+    p_id: parsed.data.id,
+    p_name: parsed.data.name,
+    p_website: parsed.data.website,
+    p_description: parsed.data.description,
+    p_install_hint: parsed.data.install_hint,
+    p_upload_formats: upload,
+    p_zip_formats: zip.filter((x) => x !== "zip" && x !== "jar"),
+    p_sort_order: parsed.data.sort_order,
+    p_is_active: formData.get("is_active") === "on",
+  });
+  if (error) return { ok: false, message: "Could not save the platform. Check the fields and try again." };
+  invalidateCatalog();
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Saved ${parsed.data.name}.` };
+}
+
+export async function saveCategory(_prev: AdminState, formData: FormData): Promise<AdminState> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) return { ok: false, message: "Admins only." };
+  const parsed = z
+    .object({
+      id: catalogId,
+      name: z.string().trim().min(2, "Name is too short.").max(40),
+      description: z.string().trim().max(300),
+      sort_order: z.coerce.number().int().min(0).max(1000),
+    })
+    .safeParse({
+      id: formData.get("id"),
+      name: formData.get("name"),
+      description: formData.get("description") ?? "",
+      sort_order: formData.get("sort_order") || 100,
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the form." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_save_category", {
+    p_id: parsed.data.id,
+    p_name: parsed.data.name,
+    p_description: parsed.data.description,
+    p_sort_order: parsed.data.sort_order,
+  });
+  if (error) return { ok: false, message: "Could not save the category." };
+  invalidateCatalog();
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Saved ${parsed.data.name}.` };
+}
+
+export async function deleteCategory(id: string): Promise<AdminState> {
+  const viewer = await getViewer();
+  if (!isAdmin(viewer)) return { ok: false, message: "Admins only." };
+  if (!catalogId.safeParse(id).success) return { ok: false, message: "Unknown category." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("admin_delete_category", { p_id: id });
+  if (error) return { ok: false, message: error.code === "P0001" ? "Listings use this category. Rename it instead." : "Could not delete the category." };
+  invalidateCatalog();
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Category deleted." };
 }

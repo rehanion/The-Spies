@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Storage is accessed only through this module so the provider can be swapped
 // (e.g. to Cloudflare R2) without touching routes or components.
 
-export type Bucket = "quarantine" | "previews";
+// quarantine: template files (20 MB objects). screenshot-uploads and
+// avatar-uploads: original images, with per-object limits that match their
+// upload limits. previews: public, server re-encoded images only.
+export type Bucket = "quarantine" | "screenshot-uploads" | "avatar-uploads" | "previews";
 
 export interface ObjectStorage {
   createUploadUrl(bucket: Bucket, key: string): Promise<{ signedUrl: string; token: string }>;
@@ -14,7 +17,8 @@ export interface ObjectStorage {
 
 class SupabaseObjectStorage implements ObjectStorage {
   async createUploadUrl(bucket: Bucket, key: string) {
-    const { data, error } = await createAdminClient().storage.from(bucket).createSignedUploadUrl(key);
+    // Never upsert: a key can be written once, so processed objects cannot be replaced.
+    const { data, error } = await createAdminClient().storage.from(bucket).createSignedUploadUrl(key, { upsert: false });
     if (error || !data) throw new Error(`Could not create upload URL: ${error?.message ?? "unknown"}`);
     return { signedUrl: data.signedUrl, token: data.token };
   }

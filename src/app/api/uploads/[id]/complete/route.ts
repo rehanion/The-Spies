@@ -13,7 +13,8 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/api/uploads
   const { id } = await ctx.params;
   if (!z.uuid().safeParse(id).success) return NextResponse.json({ error: "bad_request" }, { status: 400 });
   const viewer = await getViewer();
-  if (!viewer) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (!viewer?.profile) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (viewer.profile.is_banned) return NextResponse.json({ error: "suspended", message: "Your account is suspended." }, { status: 403 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 

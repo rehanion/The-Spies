@@ -2,8 +2,8 @@
 // SPIES manual malware-scan helper. Runs on the administrator's own computer.
 //
 // For every validated file that is waiting for a scan it:
-//   1. downloads the quarantined bytes with the admin's own session (staff-only
-//      storage policy; no secret key is needed or used),
+//   1. downloads the quarantined bytes with the signed-in session (staff or
+//      scanner storage policy; no secret key is needed or used),
 //   2. computes SHA-256 locally and compares it with the server's hash,
 //   3. scans the bytes with the local ClamAV `clamscan`,
 //   4. records engine version, signature version, time, hash and the result
@@ -125,9 +125,11 @@ if (authError || !auth.user) {
   console.error(GH + `Sign-in failed: ${authError?.message ?? "unknown error"}`);
   process.exit(2);
 }
-const { data: me } = await db.from("profiles").select("role, is_banned").eq("id", auth.user.id).single();
-if (!me || me.is_banned || !["admin", "moderator"].includes(me.role)) {
-  console.error(GH + "This account is not a moderator or admin.");
+// Staff, or the dedicated scanner account (profiles.is_scanner), which can only
+// read files waiting for a scan and record a first result for them.
+const [{ data: staff }, { data: scanner }] = await Promise.all([db.rpc("is_staff"), db.rpc("is_scanner")]);
+if (!staff && !scanner) {
+  console.error(GH + "This account is not the scanner, a moderator or an admin.");
   process.exit(2);
 }
 
@@ -136,7 +138,7 @@ console.log(`Scanner: ${version.engine}, signatures: ${version.signature}`);
 
 const { data: files, error } = await db
   .from("template_files")
-  .select("id, template_id, storage_key, original_filename, sha256, size_bytes")
+  .select("id, storage_key, sha256")
   .eq("is_current", true)
   .eq("validation_status", "passed")
   .eq("scan_status", "pending")
@@ -155,7 +157,8 @@ const dir = mkdtempSync(join(tmpdir(), "spies-scan-"));
 let failures = 0;
 try {
   for (const f of files) {
-    const label = `${f.original_filename} (${f.id})`;
+    // Logs show only the file id: GitHub Actions logs of a public repository are public.
+    const label = f.id;
     const { data: blob, error: dlError } = await db.storage.from("quarantine").download(f.storage_key);
     if (dlError || !blob) {
       console.log(`! ${label}: download failed (${dlError?.message ?? "no data"})`);
@@ -165,7 +168,7 @@ try {
     const bytes = Buffer.from(await blob.arrayBuffer());
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     if (sha256 !== f.sha256) {
-      console.log(`! ${label}: downloaded hash ${sha256} differs from server hash ${f.sha256}; not recording.`);
+      console.log(`! ${label}: downloaded hash differs from the server hash; not recording.`);
       failures++;
       continue;
     }
@@ -174,7 +177,7 @@ try {
     const scannedAt = new Date().toISOString();
     const { result, output } = scan(path);
     rmSync(path, { force: true });
-    console.log(`${result === "clean" ? "✓" : result === "flagged" ? "✗" : "!"} ${label}: ${result} sha256=${sha256}`);
+    console.log(`${result === "clean" ? "✓" : result === "flagged" ? "✗" : "!"} ${label}: ${result}`);
     if (args["dry-run"]) continue;
     const { data: stored, error: rpcError } = await db.rpc("record_scan_result", {
       p_file_id: f.id,
@@ -199,5 +202,6 @@ try {
   rmSync(dir, { recursive: true, force: true });
   await db.auth.signOut();
 }
+console.log(`Scanned ${files.length} file(s), ${failures} problem(s).`);
 console.log(args["dry-run"] ? "Dry run: nothing recorded." : "Done. Review and approve listings in the admin dashboard.");
 process.exit(failures ? 1 : 0);

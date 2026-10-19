@@ -5,7 +5,7 @@ import { TemplateGrid } from "@/components/template-card";
 import { SearchFilters } from "@/components/search-filters";
 import { Pagination } from "@/components/pagination";
 import { EmptyState } from "@/components/empty-state";
-import { CATEGORY_LABELS, PLATFORM_LABELS } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 
 export const metadata: Metadata = { title: "Browse templates" };
 
@@ -16,8 +16,9 @@ function one(v: string | string[] | undefined): string {
 export default async function BrowsePage({ searchParams }: PageProps<"/browse">) {
   const sp = await searchParams;
   const q = one(sp.q).slice(0, 100);
-  const platform = one(sp.platform) in PLATFORM_LABELS ? one(sp.platform) : "";
-  const category = one(sp.category) in CATEGORY_LABELS ? one(sp.category) : "";
+  const catalog = await getCatalog();
+  const platform = catalog.hasPlatform(one(sp.platform)) ? one(sp.platform) : "";
+  const category = catalog.hasCategory(one(sp.category)) ? one(sp.category) : "";
   const sort = normalizeSort(one(sp.sort) || undefined, !!q.trim());
   const page = Number.parseInt(one(sp.page) || "1", 10) || 1;
 
@@ -33,7 +34,7 @@ export default async function BrowsePage({ searchParams }: PageProps<"/browse">)
     return `/browse?${params.toString()}`;
   };
 
-  const heading = [platform && PLATFORM_LABELS[platform], category && CATEGORY_LABELS[category]].filter(Boolean).join(" · ");
+  const heading = [platform && catalog.platformName(platform), category && catalog.categoryName(category)].filter(Boolean).join(" · ");
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">

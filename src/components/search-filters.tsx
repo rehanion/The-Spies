@@ -1,6 +1,7 @@
-import { CATEGORY_LABELS, PLATFORM_LABELS, SORTS } from "@/lib/catalog";
+import { SORTS } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 
-export function SearchFilters({
+export async function SearchFilters({
   q,
   platform,
   category,
@@ -11,6 +12,7 @@ export function SearchFilters({
   category: string;
   sort: string;
 }) {
+  const catalog = await getCatalog();
   return (
     <form action="/browse" method="get" role="search" className="card grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-end">
       <div className="sm:col-span-2 lg:col-span-1">
@@ -21,8 +23,8 @@ export function SearchFilters({
         <label htmlFor="platform" className="label">Platform</label>
         <select id="platform" name="platform" defaultValue={platform} className="input">
           <option value="">All platforms</option>
-          {Object.entries(PLATFORM_LABELS).map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
+          {catalog.platforms.map((x) => (
+            <option key={x.id} value={x.id}>{x.name}</option>
           ))}
         </select>
       </div>
@@ -30,8 +32,8 @@ export function SearchFilters({
         <label htmlFor="category" className="label">Category</label>
         <select id="category" name="category" defaultValue={category} className="input">
           <option value="">All categories</option>
-          {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
-            <option key={id} value={id}>{label}</option>
+          {catalog.categories.map((x) => (
+            <option key={x.id} value={x.id}>{x.name}</option>
           ))}
         </select>
       </div>

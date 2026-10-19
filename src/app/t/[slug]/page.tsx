@@ -9,11 +9,12 @@ import { createClient } from "@/lib/supabase/server";
 import { formatBytes, formatDate, formatDateTime, plural, timeAgo } from "@/lib/format";
 import { actorHash } from "@/lib/request";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { LICENSES, platformLabel } from "@/lib/catalog";
+import { LICENSES } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 import { computeDownloadState, DOWNLOAD_STATE_MESSAGES } from "@/lib/download-state";
 import { Gallery, type GalleryImage } from "@/components/gallery";
 import { Avatar } from "@/components/site-header";
-import { CategoryBadge, DemoBadge, PlatformBadge, PublicationBadge, ScanBadge } from "@/components/badges";
+import { Badge, CategoryBadge, DemoBadge, PlatformBadge, PublicationBadge, ScanBadge } from "@/components/badges";
 import { Notice } from "@/components/empty-state";
 import { FollowButton } from "@/components/follow-button";
 import { DeleteReviewButton, FavoriteButton, ReviewForm } from "./interactive";
@@ -28,6 +29,7 @@ export async function generateMetadata({ params }: PageProps<"/t/[slug]">): Prom
 }
 
 export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
+  const catalog = await getCatalog();
   const { slug } = await params;
   const [detail, viewer] = await Promise.all([getTemplateBySlug(slug), getViewer()]);
   if (!detail) notFound();
@@ -90,7 +92,9 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
           <Notice tone={t.publication_status === "rejected" || t.publication_status === "removed" ? "danger" : "warn"} title="Not public yet">
             Only you{staff && !isOwner ? " (as staff)" : ""} can see this page.{" "}
             {t.publication_status === "pending"
-              ? "It goes live automatically once the virus scan has passed."
+              ? files.some((f) => f.contains_code)
+                ? "Because it includes a compiled plugin, a moderator checks it after the virus scan."
+                : "It goes live automatically once the virus scan has passed."
               : <>Status: <strong>{t.publication_status}</strong>.</>}
             {t.moderation_note ? <> Note: {t.moderation_note}</> : null}{" "}
             {isOwner ? <Link className="underline" href={`/dashboard/submissions/${t.id}`}>Manage this upload</Link> : null}
@@ -160,7 +164,7 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                 <div>
                   <h2 className="text-sm font-semibold text-fg">Requirements</h2>
                   <p className="mt-1 text-fg-muted">
-                    {platformLabel(t.platform_id)}{t.platform_version ? ` ${t.platform_version}` : ""}. {t.dependencies || "No other dependencies listed."}
+                    {catalog.platformName(t.platform_id)}{t.platform_version ? ` ${t.platform_version}` : ""}. {t.dependencies || "No other dependencies listed."}
                   </p>
                 </div>
                 <div>
@@ -201,6 +205,9 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                     <div className="mt-3 space-y-1.5 text-xs">
                       <div className="flex flex-wrap items-center gap-2">
                         <ScanBadge status={f.scan_status} />
+                        {f.contains_code ? (
+                          <Badge tone="warn" title="This file runs code inside your trading platform when it is loaded.">Compiled plugin</Badge>
+                        ) : null}
                         {f.scan_status === "clean" && f.scanned_at ? (
                           <span className="text-fg-muted">
                             on {formatDateTime(f.scanned_at)} with {f.scanner_name ?? "ClamAV"} {f.scanner_version}
@@ -208,6 +215,12 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                           </span>
                         ) : null}
                       </div>
+                      {f.contains_code ? (
+                        <p className="text-warn">
+                          This plugin runs code on your computer when your platform loads it. A moderator reviewed the listing and it passed the
+                          scan, but no scan can prove code is safe. Only install it if you trust the creator.
+                        </p>
+                      ) : null}
                       {f.sha256 ? (
                         <p className="break-all font-mono text-fg-subtle">
                           SHA-256 <span className="text-fg-muted">{f.sha256}</span>

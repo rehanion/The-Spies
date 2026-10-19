@@ -1,4 +1,3 @@
-
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -23,7 +22,27 @@ export type Database = {
           }
         },"public": {
           Tables: {
-            "categories": {
+            "avatar_uploads": {
+                  Row: {
+                    "created_at": string,"declared_size_bytes": number,"id": string,"processed_at": string | null,"status": string,"storage_key": string,"user_id": string,"avatar_reservation_open": boolean | null
+                  }
+                  ComputedFields: "avatar_reservation_open"
+                  Insert: {
+                    "created_at"?: string,"declared_size_bytes": number,"id"?: string,"processed_at"?: string | null,"status"?: string,"storage_key": string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"declared_size_bytes"?: number,"id"?: string,"processed_at"?: string | null,"status"?: string,"storage_key"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "avatar_uploads_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"categories": {
                   Row: {
                     "description": string,"id": string,"name": string,"sort_order": number
                   }
@@ -169,28 +188,28 @@ isOneToOne: false
                   ]
                 },"platforms": {
                   Row: {
-                    "description": string,"id": string,"is_active": boolean,"name": string,"sort_order": number,"website": string
+                    "description": string,"id": string,"install_hint": string,"is_active": boolean,"name": string,"sort_order": number,"upload_formats": (string)[],"website": string,"zip_formats": (string)[]
                   }
                   ComputedFields: never
                   Insert: {
-                    "description"?: string,"id": string,"is_active"?: boolean,"name": string,"sort_order"?: number,"website"?: string
+                    "description"?: string,"id": string,"install_hint"?: string,"is_active"?: boolean,"name": string,"sort_order"?: number,"upload_formats"?: (string)[],"website"?: string,"zip_formats"?: (string)[]
                   }
                   Update: {
-                    "description"?: string,"id"?: string,"is_active"?: boolean,"name"?: string,"sort_order"?: number,"website"?: string
+                    "description"?: string,"id"?: string,"install_hint"?: string,"is_active"?: boolean,"name"?: string,"sort_order"?: number,"upload_formats"?: (string)[],"website"?: string,"zip_formats"?: (string)[]
                   }
                   Relationships: [
                     
                   ]
                 },"profiles": {
                   Row: {
-                    "avatar_key": string | null,"bio": string,"created_at": string,"display_name": string,"follower_count": number,"id": string,"is_banned": boolean,"is_demo": boolean,"role": Database["public"]['Enums']["app_role"],"updated_at": string,"username": string
+                    "avatar_key": string | null,"bio": string,"created_at": string,"display_name": string,"follower_count": number,"id": string,"is_banned": boolean,"is_demo": boolean,"is_scanner": boolean,"role": Database["public"]['Enums']["app_role"],"updated_at": string,"username": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avatar_key"?: string | null,"bio"?: string,"created_at"?: string,"display_name"?: string,"follower_count"?: number,"id": string,"is_banned"?: boolean,"is_demo"?: boolean,"role"?: Database["public"]['Enums']["app_role"],"updated_at"?: string,"username": string
+                    "avatar_key"?: string | null,"bio"?: string,"created_at"?: string,"display_name"?: string,"follower_count"?: number,"id": string,"is_banned"?: boolean,"is_demo"?: boolean,"is_scanner"?: boolean,"role"?: Database["public"]['Enums']["app_role"],"updated_at"?: string,"username": string
                   }
                   Update: {
-                    "avatar_key"?: string | null,"bio"?: string,"created_at"?: string,"display_name"?: string,"follower_count"?: number,"id"?: string,"is_banned"?: boolean,"is_demo"?: boolean,"role"?: Database["public"]['Enums']["app_role"],"updated_at"?: string,"username"?: string
+                    "avatar_key"?: string | null,"bio"?: string,"created_at"?: string,"display_name"?: string,"follower_count"?: number,"id"?: string,"is_banned"?: boolean,"is_demo"?: boolean,"is_scanner"?: boolean,"role"?: Database["public"]['Enums']["app_role"],"updated_at"?: string,"username"?: string
                   }
                   Relationships: [
                     
@@ -301,14 +320,14 @@ isOneToOne: false
                   ]
                 },"site_settings": {
                   Row: {
-                    "auto_publish": boolean,"id": number,"updated_at": string,"updated_by": string | null
+                    "auto_publish": boolean,"id": number,"max_daily_submissions": number,"updated_at": string,"updated_by": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "auto_publish"?: boolean,"id"?: number,"updated_at"?: string,"updated_by"?: string | null
+                    "auto_publish"?: boolean,"id"?: number,"max_daily_submissions"?: number,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Update: {
-                    "auto_publish"?: boolean,"id"?: number,"updated_at"?: string,"updated_by"?: string | null
+                    "auto_publish"?: boolean,"id"?: number,"max_daily_submissions"?: number,"updated_at"?: string,"updated_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -321,14 +340,14 @@ isOneToOne: false
                   ]
                 },"template_files": {
                   Row: {
-                    "approved_sha256": string | null,"created_at": string,"declared_size_bytes": number,"detected_format": string | null,"extension": string,"id": string,"is_current": boolean,"original_filename": string,"processed_at": string | null,"replaces_file_id": string | null,"scan_status": Database["public"]['Enums']["scan_status"],"scanned_at": string | null,"scanned_sha256": string | null,"scanner_name": string | null,"scanner_version": string | null,"sha256": string | null,"signature_version": string | null,"size_bytes": number | null,"storage_bucket": string,"storage_key": string,"superseded_at": string | null,"template_id": string,"updated_at": string,"uploaded_at": string | null,"uploader_id": string,"validation_report": NonNullable<Json>,"validation_status": Database["public"]['Enums']["validation_status"],"file_bytes_expr": number | null
+                    "approved_sha256": string | null,"contains_code": boolean,"created_at": string,"declared_size_bytes": number,"detected_format": string | null,"extension": string,"id": string,"is_current": boolean,"original_filename": string,"processed_at": string | null,"replaces_file_id": string | null,"scan_status": Database["public"]['Enums']["scan_status"],"scanned_at": string | null,"scanned_sha256": string | null,"scanner_name": string | null,"scanner_version": string | null,"sha256": string | null,"signature_version": string | null,"size_bytes": number | null,"storage_bucket": string,"storage_key": string,"superseded_at": string | null,"template_id": string,"updated_at": string,"uploaded_at": string | null,"uploader_id": string,"validation_report": NonNullable<Json>,"validation_status": Database["public"]['Enums']["validation_status"],"file_bytes_expr": number | null
                   }
                   ComputedFields: "file_bytes_expr"
                   Insert: {
-                    "approved_sha256"?: string | null,"created_at"?: string,"declared_size_bytes": number,"detected_format"?: string | null,"extension": string,"id"?: string,"is_current"?: boolean,"original_filename": string,"processed_at"?: string | null,"replaces_file_id"?: string | null,"scan_status"?: Database["public"]['Enums']["scan_status"],"scanned_at"?: string | null,"scanned_sha256"?: string | null,"scanner_name"?: string | null,"scanner_version"?: string | null,"sha256"?: string | null,"signature_version"?: string | null,"size_bytes"?: number | null,"storage_bucket"?: string,"storage_key": string,"superseded_at"?: string | null,"template_id": string,"updated_at"?: string,"uploaded_at"?: string | null,"uploader_id": string,"validation_report"?: NonNullable<Json>,"validation_status"?: Database["public"]['Enums']["validation_status"]
+                    "approved_sha256"?: string | null,"contains_code"?: boolean,"created_at"?: string,"declared_size_bytes": number,"detected_format"?: string | null,"extension": string,"id"?: string,"is_current"?: boolean,"original_filename": string,"processed_at"?: string | null,"replaces_file_id"?: string | null,"scan_status"?: Database["public"]['Enums']["scan_status"],"scanned_at"?: string | null,"scanned_sha256"?: string | null,"scanner_name"?: string | null,"scanner_version"?: string | null,"sha256"?: string | null,"signature_version"?: string | null,"size_bytes"?: number | null,"storage_bucket"?: string,"storage_key": string,"superseded_at"?: string | null,"template_id": string,"updated_at"?: string,"uploaded_at"?: string | null,"uploader_id": string,"validation_report"?: NonNullable<Json>,"validation_status"?: Database["public"]['Enums']["validation_status"]
                   }
                   Update: {
-                    "approved_sha256"?: string | null,"created_at"?: string,"declared_size_bytes"?: number,"detected_format"?: string | null,"extension"?: string,"id"?: string,"is_current"?: boolean,"original_filename"?: string,"processed_at"?: string | null,"replaces_file_id"?: string | null,"scan_status"?: Database["public"]['Enums']["scan_status"],"scanned_at"?: string | null,"scanned_sha256"?: string | null,"scanner_name"?: string | null,"scanner_version"?: string | null,"sha256"?: string | null,"signature_version"?: string | null,"size_bytes"?: number | null,"storage_bucket"?: string,"storage_key"?: string,"superseded_at"?: string | null,"template_id"?: string,"updated_at"?: string,"uploaded_at"?: string | null,"uploader_id"?: string,"validation_report"?: NonNullable<Json>,"validation_status"?: Database["public"]['Enums']["validation_status"]
+                    "approved_sha256"?: string | null,"contains_code"?: boolean,"created_at"?: string,"declared_size_bytes"?: number,"detected_format"?: string | null,"extension"?: string,"id"?: string,"is_current"?: boolean,"original_filename"?: string,"processed_at"?: string | null,"replaces_file_id"?: string | null,"scan_status"?: Database["public"]['Enums']["scan_status"],"scanned_at"?: string | null,"scanned_sha256"?: string | null,"scanner_name"?: string | null,"scanner_version"?: string | null,"sha256"?: string | null,"signature_version"?: string | null,"size_bytes"?: number | null,"storage_bucket"?: string,"storage_key"?: string,"superseded_at"?: string | null,"template_id"?: string,"updated_at"?: string,"uploaded_at"?: string | null,"uploader_id"?: string,"validation_report"?: NonNullable<Json>,"validation_status"?: Database["public"]['Enums']["validation_status"]
                   }
                   Relationships: [
                     {
@@ -353,14 +372,14 @@ isOneToOne: false
                   ]
                 },"template_screenshots": {
                   Row: {
-                    "caption": string,"created_at": string,"declared_size_bytes": number,"failure_reason": string | null,"height": number | null,"id": string,"original_key": string,"position": number,"public_key": string | null,"public_size_bytes": number | null,"size_bytes": number | null,"status": Database["public"]['Enums']["screenshot_status"],"template_id": string,"thumb_key": string | null,"updated_at": string,"uploader_id": string,"width": number | null,"shot_bytes_expr": number | null
+                    "caption": string,"created_at": string,"declared_size_bytes": number,"failure_reason": string | null,"height": number | null,"id": string,"original_bucket": string,"original_key": string,"position": number,"public_key": string | null,"public_size_bytes": number | null,"size_bytes": number | null,"status": Database["public"]['Enums']["screenshot_status"],"template_id": string,"thumb_key": string | null,"updated_at": string,"uploader_id": string,"width": number | null,"shot_bytes_expr": number | null
                   }
                   ComputedFields: "shot_bytes_expr"
                   Insert: {
-                    "caption"?: string,"created_at"?: string,"declared_size_bytes": number,"failure_reason"?: string | null,"height"?: number | null,"id"?: string,"original_key": string,"position"?: number,"public_key"?: string | null,"public_size_bytes"?: number | null,"size_bytes"?: number | null,"status"?: Database["public"]['Enums']["screenshot_status"],"template_id": string,"thumb_key"?: string | null,"updated_at"?: string,"uploader_id": string,"width"?: number | null
+                    "caption"?: string,"created_at"?: string,"declared_size_bytes": number,"failure_reason"?: string | null,"height"?: number | null,"id"?: string,"original_bucket"?: string,"original_key": string,"position"?: number,"public_key"?: string | null,"public_size_bytes"?: number | null,"size_bytes"?: number | null,"status"?: Database["public"]['Enums']["screenshot_status"],"template_id": string,"thumb_key"?: string | null,"updated_at"?: string,"uploader_id": string,"width"?: number | null
                   }
                   Update: {
-                    "caption"?: string,"created_at"?: string,"declared_size_bytes"?: number,"failure_reason"?: string | null,"height"?: number | null,"id"?: string,"original_key"?: string,"position"?: number,"public_key"?: string | null,"public_size_bytes"?: number | null,"size_bytes"?: number | null,"status"?: Database["public"]['Enums']["screenshot_status"],"template_id"?: string,"thumb_key"?: string | null,"updated_at"?: string,"uploader_id"?: string,"width"?: number | null
+                    "caption"?: string,"created_at"?: string,"declared_size_bytes"?: number,"failure_reason"?: string | null,"height"?: number | null,"id"?: string,"original_bucket"?: string,"original_key"?: string,"position"?: number,"public_key"?: string | null,"public_size_bytes"?: number | null,"size_bytes"?: number | null,"status"?: Database["public"]['Enums']["screenshot_status"],"template_id"?: string,"thumb_key"?: string | null,"updated_at"?: string,"uploader_id"?: string,"width"?: number | null
                   }
                   Relationships: [
                     {
@@ -399,14 +418,14 @@ isOneToOne: false
                   ]
                 },"templates": {
                   Row: {
-                    "approved_at": string | null,"approved_by": string | null,"category_id": string,"comment_count": number,"cover_screenshot_id": string | null,"created_at": string,"creator_id": string,"dependencies": string,"description": string,"download_count": number,"favorite_count": number,"id": string,"install_steps": string,"is_demo": boolean,"license_code": string,"license_text": string,"moderation_note": string | null,"platform_id": string,"platform_version": string,"publication_status": Database["public"]['Enums']["publication_status"],"rating_avg": number,"rating_count": number,"rights_attested": boolean,"search_vector": unknown,"slug": string,"submitted_at": string | null,"summary": string,"tags": (string)[],"title": string,"updated_at": string,"view_count": number
+                    "approved_at": string | null,"approved_by": string | null,"category_id": string,"comment_count": number,"cover_screenshot_id": string | null,"created_at": string,"creator_id": string,"dependencies": string,"description": string,"download_count": number,"favorite_count": number,"id": string,"install_steps": string,"is_demo": boolean,"license_code": string,"license_text": string,"moderation_note": string | null,"platform_id": string,"platform_version": string,"publication_status": Database["public"]['Enums']["publication_status"],"rating_avg": number,"rating_count": number,"requires_review": boolean,"rights_attested": boolean,"search_vector": unknown,"slug": string,"submitted_at": string | null,"summary": string,"tags": (string)[],"title": string,"updated_at": string,"view_count": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"category_id": string,"comment_count"?: number,"cover_screenshot_id"?: string | null,"created_at"?: string,"creator_id": string,"dependencies"?: string,"description"?: string,"download_count"?: number,"favorite_count"?: number,"id"?: string,"install_steps"?: string,"is_demo"?: boolean,"license_code"?: string,"license_text"?: string,"moderation_note"?: string | null,"platform_id": string,"platform_version"?: string,"publication_status"?: Database["public"]['Enums']["publication_status"],"rating_avg"?: number,"rating_count"?: number,"rights_attested"?: boolean,"search_vector"?: unknown,"slug": string,"submitted_at"?: string | null,"summary"?: string,"tags"?: (string)[],"title": string,"updated_at"?: string,"view_count"?: number
+                    "approved_at"?: string | null,"approved_by"?: string | null,"category_id": string,"comment_count"?: number,"cover_screenshot_id"?: string | null,"created_at"?: string,"creator_id": string,"dependencies"?: string,"description"?: string,"download_count"?: number,"favorite_count"?: number,"id"?: string,"install_steps"?: string,"is_demo"?: boolean,"license_code"?: string,"license_text"?: string,"moderation_note"?: string | null,"platform_id": string,"platform_version"?: string,"publication_status"?: Database["public"]['Enums']["publication_status"],"rating_avg"?: number,"rating_count"?: number,"requires_review"?: boolean,"rights_attested"?: boolean,"search_vector"?: unknown,"slug": string,"submitted_at"?: string | null,"summary"?: string,"tags"?: (string)[],"title": string,"updated_at"?: string,"view_count"?: number
                   }
                   Update: {
-                    "approved_at"?: string | null,"approved_by"?: string | null,"category_id"?: string,"comment_count"?: number,"cover_screenshot_id"?: string | null,"created_at"?: string,"creator_id"?: string,"dependencies"?: string,"description"?: string,"download_count"?: number,"favorite_count"?: number,"id"?: string,"install_steps"?: string,"is_demo"?: boolean,"license_code"?: string,"license_text"?: string,"moderation_note"?: string | null,"platform_id"?: string,"platform_version"?: string,"publication_status"?: Database["public"]['Enums']["publication_status"],"rating_avg"?: number,"rating_count"?: number,"rights_attested"?: boolean,"search_vector"?: unknown,"slug"?: string,"submitted_at"?: string | null,"summary"?: string,"tags"?: (string)[],"title"?: string,"updated_at"?: string,"view_count"?: number
+                    "approved_at"?: string | null,"approved_by"?: string | null,"category_id"?: string,"comment_count"?: number,"cover_screenshot_id"?: string | null,"created_at"?: string,"creator_id"?: string,"dependencies"?: string,"description"?: string,"download_count"?: number,"favorite_count"?: number,"id"?: string,"install_steps"?: string,"is_demo"?: boolean,"license_code"?: string,"license_text"?: string,"moderation_note"?: string | null,"platform_id"?: string,"platform_version"?: string,"publication_status"?: Database["public"]['Enums']["publication_status"],"rating_avg"?: number,"rating_count"?: number,"requires_review"?: boolean,"rights_attested"?: boolean,"search_vector"?: unknown,"slug"?: string,"submitted_at"?: string | null,"summary"?: string,"tags"?: (string)[],"title"?: string,"updated_at"?: string,"view_count"?: number
                   }
                   Relationships: [
                     {
@@ -447,7 +466,16 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "admin_set_auto_publish":
+            "admin_delete_category":
+{ Args: { "p_id": string }; Returns: undefined
+                           },
+"admin_save_category":
+{ Args: { "p_description": string,"p_id": string,"p_name": string,"p_sort_order": number }; Returns: undefined
+                           },
+"admin_save_platform":
+{ Args: { "p_description": string,"p_id": string,"p_install_hint": string,"p_is_active": boolean,"p_name": string,"p_sort_order": number,"p_upload_formats": (string)[],"p_website": string,"p_zip_formats": (string)[] }; Returns: undefined
+                           },
+"admin_set_auto_publish":
 { Args: { "p_enabled": boolean }; Returns: boolean
                            },
 "admin_set_banned":
@@ -455,6 +483,14 @@ isOneToOne: false
                            },
 "admin_set_user_role":
 { Args: { "p_role": Database["public"]['Enums']["app_role"],"p_user_id": string }; Returns: undefined
+                           },
+"avatar_reservation_open":
+{ Args: { "a": Omit<Database["public"]['Tables']["avatar_uploads"]['Row'], Database["public"]['Tables']["avatar_uploads"]['ComputedFields']> }; Returns: boolean
+                           },
+"cleanup_stale_uploads":
+{ Args: Record<PropertyKey, never>; Returns: {
+              "avatars": number,"files": number,"screenshots": number
+            }[]
                            },
 "consume_rate_limit":
 { Args: { "p_key": string,"p_limit": number,"p_window_seconds": number }; Returns: boolean
@@ -471,8 +507,14 @@ isOneToOne: false
 "is_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
+"is_scanner":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "is_staff":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"known_file_formats":
+{ Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
 "log_event":
 { Args: { "p_action": string,"p_details"?: Json,"p_file_id": string,"p_target_user"?: string,"p_template_id": string }; Returns: undefined
@@ -482,6 +524,9 @@ isOneToOne: false
                            },
 "record_scan_result":
 { Args: { "p_file_id": string,"p_notes"?: string,"p_raw_output"?: string,"p_result": Database["public"]['Enums']["scan_status"],"p_scanned_at"?: string,"p_scanned_sha256": string,"p_scanner_name": string,"p_scanner_version": string,"p_signature_version": string }; Returns: Database["public"]['Enums']["scan_status"]
+                           },
+"refresh_rating":
+{ Args: { "p_template_id": string }; Returns: undefined
                            },
 "register_download":
 { Args: { "p_actor_hash": string,"p_file_id": string,"p_user_id": string }; Returns: boolean
@@ -502,6 +547,11 @@ isOneToOne: false
                            },
 "shot_bytes_expr":
 { Args: { "s": Omit<Database["public"]['Tables']["template_screenshots"]['Row'], Database["public"]['Tables']["template_screenshots"]['ComputedFields']> }; Returns: number
+                           },
+"storage_orphans":
+{ Args: { "p_limit"?: number,"p_min_age"?: string }; Returns: {
+              "bucket_id": string,"name": string,"size": number
+            }[]
                            },
 "storage_usage":
 { Args: Record<PropertyKey, never>; Returns: {

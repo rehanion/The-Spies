@@ -311,4 +311,175 @@ describe.skipIf(!enabled)("row level security and workflow guards", () => {
     expect((await moderator.client.storage.from("quarantine").download(key)).error).toBeNull();
     await service().storage.from("quarantine").remove([key]);
   });
+
+  it("a listing a moderator rejected never auto-publishes again until a moderator approves it", async () => {
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
+    const l = await pendingListing(creator.id);
+    const row = async () =>
+      (await service().from("templates").select("publication_status, requires_review").eq("id", l.id).single()).data;
+    await creator.client.rpc("submit_template", { p_template_id: l.id });
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+    });
+    expect(await row()).toMatchObject({ publication_status: "approved", requires_review: false });
+
+    expect((await moderator.client.rpc("moderate_template", { p_template_id: l.id, p_action: "reject", p_reason: "Not a real template" })).error).toBeNull();
+    expect(await row()).toMatchObject({ publication_status: "rejected", requires_review: true });
+
+    // The creator cannot clear the flag, through the table or any other way.
+    expect((await creator.client.from("templates").update({ requires_review: false } as never).eq("id", l.id)).error).not.toBeNull();
+    expect((await creator.client.from("templates").update({ title: "Renamed listing", requires_review: false } as never).eq("id", l.id)).error).not.toBeNull();
+    expect((await row())?.requires_review).toBe(true);
+
+    // Resubmitting with clean files waits for a moderator instead of going live.
+    expect((await creator.client.rpc("submit_template", { p_template_id: l.id })).error).toBeNull();
+    expect(await row()).toMatchObject({ publication_status: "pending", requires_review: true });
+    expect((await anon().from("templates").select("id").eq("id", l.id)).data).toEqual([]);
+
+    // A moderator approval clears the flag; later edits can auto-publish again.
+    expect((await moderator.client.rpc("moderate_template", { p_template_id: l.id, p_action: "approve" })).error).toBeNull();
+    expect(await row()).toMatchObject({ publication_status: "approved", requires_review: false });
+    await creator.client.from("templates").update({ description: "edited after approval" }).eq("id", l.id);
+    expect((await row())?.publication_status).toBe("approved");
+
+    // Removal sets the flag too.
+    await moderator.client.rpc("moderate_template", { p_template_id: l.id, p_action: "remove", p_reason: "Copyright claim" });
+    expect(await row()).toMatchObject({ publication_status: "removed", requires_review: true });
+  });
+
+  it("the scanner account only reads and records scans of files waiting for one", async () => {
+    const scanner = await user();
+    await service().from("profiles").update({ is_scanner: true } as never).eq("id", scanner.id);
+    expect((await scanner.client.rpc("is_scanner")).data).toBe(true);
+    expect((await scanner.client.rpc("is_staff")).data).toBe(false);
+    // Nobody can make themselves a scanner.
+    expect((await other.client.from("profiles").update({ is_scanner: true } as never).eq("id", other.id)).error).not.toBeNull();
+    expect((await other.client.rpc("is_scanner")).data).toBe(false);
+
+    const waiting = await pendingListing(creator.id);
+    const done = await pendingListing(creator.id);
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: done.fileId, p_result: "flagged", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: done.hash,
+    });
+    const keys = Object.fromEntries(
+      ((await service().from("template_files").select("id, storage_key").in("id", [waiting.fileId, done.fileId])).data ?? []).map((f) => [f.id, f.storage_key]),
+    );
+    for (const id of [waiting.fileId, done.fileId]) {
+      await service().storage.from("quarantine").upload(keys[id], new Blob(["scan me"]), { contentType: "application/octet-stream" });
+    }
+
+    // Listing: only files waiting for a scan, and none of the listings themselves.
+    const { data: visible } = await scanner.client.from("template_files").select("id").in("id", [waiting.fileId, done.fileId]);
+    expect(visible?.map((f) => f.id)).toEqual([waiting.fileId]);
+    expect((await scanner.client.from("templates").select("id").eq("id", waiting.id)).data).toEqual([]);
+
+    // Bytes: only of the waiting file.
+    expect((await scanner.client.storage.from("quarantine").download(keys[waiting.fileId])).error).toBeNull();
+    expect((await scanner.client.storage.from("quarantine").download(keys[done.fileId])).error).not.toBeNull();
+
+    // Recording: a first result only, never overwriting an existing one, and no moderation.
+    expect((await scanner.client.rpc("record_scan_result", {
+      p_file_id: done.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: done.hash,
+    })).error).not.toBeNull();
+    const first = await scanner.client.rpc("record_scan_result", {
+      p_file_id: waiting.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: waiting.hash,
+    });
+    expect(first.error).toBeNull();
+    expect(first.data).toBe("clean");
+    expect((await scanner.client.rpc("record_scan_result", {
+      p_file_id: waiting.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: waiting.hash,
+    })).error).not.toBeNull();
+    expect((await scanner.client.rpc("moderate_template", { p_template_id: waiting.id, p_action: "approve" })).error).not.toBeNull();
+    expect((await scanner.client.storage.from("quarantine").download(keys[waiting.fileId])).error).not.toBeNull();
+    await service().storage.from("quarantine").remove(Object.values(keys));
+  });
+
+  it("direct API inserts cannot skip the daily listing limit", async () => {
+    const maker = await user();
+    const insert = () =>
+      maker.client.from("templates").insert({
+        slug: `cap-${randomBytes(5).toString("hex")}`,
+        creator_id: maker.id,
+        title: "Daily cap listing",
+        platform_id: "quantower",
+        category_id: "footprint",
+      });
+    const cap = (await service().from("site_settings").select("max_daily_submissions").single()).data!.max_daily_submissions;
+    const results = await Promise.all(Array.from({ length: cap + 2 }, () => insert()));
+    expect(results.filter((r) => r.error === null)).toHaveLength(cap);
+    expect((await insert()).error?.message).toMatch(/limit/i);
+    // The server's secret key (seed and maintenance scripts) is not limited.
+    expect((await service().from("templates").insert({
+      slug: `cap-${randomBytes(5).toString("hex")}`, creator_id: maker.id, title: "Seeded listing", platform_id: "quantower", category_id: "footprint",
+    })).error).toBeNull();
+  });
+
+  it("suspended users cannot favorite and their reviews stop counting", async () => {
+    await service().from("site_settings").update({ auto_publish: true }).eq("id", 1);
+    const l = await pendingListing(creator.id);
+    await creator.client.rpc("submit_template", { p_template_id: l.id });
+    await moderator.client.rpc("record_scan_result", {
+      p_file_id: l.fileId, p_result: "clean", p_scanner_name: "ClamAV", p_scanner_version: "1", p_signature_version: "d", p_scanned_sha256: l.hash,
+    });
+    const reviewer = await user();
+    expect((await reviewer.client.from("reviews").insert({ template_id: l.id, author_id: reviewer.id, rating: 1 })).error).toBeNull();
+    expect((await other.client.from("reviews").insert({ template_id: l.id, author_id: other.id, rating: 5 })).error).toBeNull();
+    const rating = async () => (await service().from("templates").select("rating_count, rating_avg").eq("id", l.id).single()).data;
+    expect(await rating()).toMatchObject({ rating_count: 2 });
+
+    await moderator.client.rpc("admin_set_banned", { p_user_id: reviewer.id, p_banned: true, p_reason: "spam" });
+    expect(await rating()).toMatchObject({ rating_count: 1 });
+    expect(Number((await rating())?.rating_avg)).toBe(5);
+    expect((await anon().from("reviews").select("id").eq("template_id", l.id)).data).toHaveLength(1);
+    expect((await reviewer.client.from("favorites").insert({ user_id: reviewer.id, template_id: l.id })).error).not.toBeNull();
+
+    await moderator.client.rpc("admin_set_banned", { p_user_id: reviewer.id, p_banned: false });
+    expect(await rating()).toMatchObject({ rating_count: 2 });
+    expect((await reviewer.client.from("favorites").insert({ user_id: reviewer.id, template_id: l.id })).error).toBeNull();
+  });
+
+  it("storage: upload URLs write a key once, quotas use real sizes, orphans are found", async () => {
+    const owner = await user();
+    const { data: t } = await service()
+      .from("templates")
+      .insert({ slug: `st-${randomBytes(4).toString("hex")}`, creator_id: owner.id, title: "Storage listing", platform_id: "quantower", category_id: "footprint" })
+      .select("id")
+      .single();
+    const key = `files/${t!.id}/${randomUUID()}.bin`;
+    // Declared 10 bytes, uploads 3000.
+    await service().from("template_files").insert({
+      template_id: t!.id, uploader_id: owner.id, storage_key: key, original_filename: "a.xml", extension: "xml", declared_size_bytes: 10,
+    });
+    expect((await service().rpc("user_storage_usage", { p_user_id: owner.id })).data).toBe(10);
+    const signed = await service().storage.from("quarantine").createSignedUploadUrl(key, { upsert: false });
+    const first = await anon().storage.from("quarantine").uploadToSignedUrl(key, signed.data!.token, new Blob(["x".repeat(3000)]), { contentType: "application/octet-stream" });
+    expect(first.error).toBeNull();
+    expect((await service().rpc("user_storage_usage", { p_user_id: owner.id })).data).toBe(3000);
+    // The same URL cannot replace the stored object, even when the client asks to upsert.
+    const again = await anon().storage.from("quarantine").uploadToSignedUrl(key, signed.data!.token, new Blob(["y".repeat(10)]), { contentType: "application/octet-stream", upsert: true });
+    expect(again.error).not.toBeNull();
+    const stored = await service().storage.from("quarantine").download(key);
+    expect((await stored.data!.text()).startsWith("x")).toBe(true);
+
+    // Once the record no longer needs the object (failed validation), it is an orphan.
+    const orphansOf = async () =>
+      ((await service().rpc("storage_orphans", { p_min_age: "0 seconds" })).data ?? []).filter((o) => o.name === key);
+    expect(await orphansOf()).toEqual([]);
+    await service().from("template_files").update({ validation_status: "failed" }).eq("storage_key", key);
+    expect(await orphansOf()).toHaveLength(1);
+    // Still counted for its owner until it is deleted.
+    expect((await service().rpc("user_storage_usage", { p_user_id: owner.id })).data).toBe(3000);
+    await service().storage.from("quarantine").remove([key]);
+    expect((await service().rpc("user_storage_usage", { p_user_id: owner.id })).data).toBe(0);
+
+    // Avatar originals have their own 2 MB bucket.
+    const avatarKey = `avatars/${owner.id}/${randomUUID()}.bin`;
+    const avatarUrl = await service().storage.from("avatar-uploads").createSignedUploadUrl(avatarKey, { upsert: false });
+    const big = await anon().storage.from("avatar-uploads").uploadToSignedUrl(avatarKey, avatarUrl.data!.token, new Blob([new Uint8Array(2 * 1024 * 1024 + 1)]), { contentType: "application/octet-stream" });
+    expect(big.error).not.toBeNull();
+    // Clients have no access to avatar reservations or the cleanup functions.
+    expect((await owner.client.from("avatar_uploads").select("id")).error).not.toBeNull();
+    expect((await owner.client.rpc("storage_orphans", {})).error).not.toBeNull();
+    expect((await owner.client.rpc("cleanup_stale_uploads")).error).not.toBeNull();
+  });
 });

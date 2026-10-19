@@ -3,15 +3,17 @@
 // quarantine bucket. Validation is not a malware scan; it only rejects content
 // that is malformed or outside the allowlist.
 
-import { FORMATS, PLATFORM_FORMATS, checkUploadExtension, extensionOf } from "./formats.ts";
+import { CODE_FORMATS, FORMATS, checkUploadExtension, extensionOf, type PlatformFormats } from "./formats.ts";
 import type { Limits } from "./limits.ts";
-import { FORBIDDEN_CONTENT, describeSniffed, sniff } from "./magic.ts";
+import { FORBIDDEN_CONTENT, describeSniffed, inspectPeLibrary, sniff } from "./magic.ts";
 import { inspectZip, type ZipEntryInfo } from "./zip.ts";
 
 export interface ValidationReport {
   format: string;
   detected: string;
   checks: string[];
+  /** True when the file holds compiled code that runs inside the trading platform. */
+  containsCode?: boolean;
   entries?: Pick<ZipEntryInfo, "name" | "uncompressedSize">[];
 }
 
@@ -57,7 +59,16 @@ export function checkTextConfig(ext: string, data: Uint8Array): string | null {
   }
   if (kind === "text-doc") {
     const text = decodeText(data);
-    if (text === null) return "Readme files must be UTF-8 text.";
+    if (text === null) return "Text files must be UTF-8 text.";
+    if (text.includes("\u0000")) return "The text file contains NUL characters.";
+    return null;
+  }
+  if (kind === "pine-script") {
+    const text = decodeText(data);
+    if (text === null || text.includes("\u0000")) return "Pine Script files must be UTF-8 text.";
+    if (!/\b(indicator|strategy|library|study)\s*\(/.test(text)) {
+      return "This does not look like Pine Script (no indicator(), strategy() or library() call).";
+    }
     return null;
   }
   return null;
@@ -66,14 +77,14 @@ export function checkTextConfig(ext: string, data: Uint8Array): string | null {
 export function validateTemplateFile(
   data: Uint8Array,
   filename: string,
-  platformId: string,
+  rules: PlatformFormats | null,
   limits: Limits,
 ): FileValidation {
   const checks: string[] = [];
   const ext = extensionOf(filename);
-  const extCheck = checkUploadExtension(platformId, filename);
+  const extCheck = checkUploadExtension(rules, filename);
   if (!extCheck.ok) return { ok: false, reason: extCheck.reason, report: { format: ext, checks } };
-  checks.push(`extension .${ext} is allowlisted for ${platformId}`);
+  checks.push(`extension .${ext} is allowed for this platform`);
 
   if (data.length === 0) return { ok: false, reason: "The file is empty.", report: { format: ext, checks } };
   if (data.length > limits.maxTemplateFileBytes) {
@@ -82,39 +93,72 @@ export function validateTemplateFile(
   checks.push(`size ${data.length} bytes within limit`);
 
   const detected = sniff(data);
+  const format = extCheck.format;
+  const zipLimits = {
+    maxEntries: limits.maxZipEntries,
+    maxTotalUncompressedBytes: limits.maxZipTotalUncompressedBytes,
+    maxCompressionRatio: limits.maxZipCompressionRatio,
+    maxPathDepth: limits.maxZipPathDepth,
+  };
+
+  if (format.kind === "pe-library") {
+    if (detected !== "pe-executable") return { ok: false, reason: "The file has a .dll extension but is not a Windows DLL.", report: { format: ext, detected, checks } };
+    const pe = inspectPeLibrary(data);
+    if (!pe.ok) return { ok: false, reason: pe.reason, report: { format: ext, detected, checks } };
+    checks.push(`Windows DLL, ${pe.is64 ? "64" : "32"} bit${pe.isDotNet ? ", .NET assembly" : ", native code"}`);
+    return { ok: true, report: { format: ext, detected: pe.isDotNet ? "dotnet-dll" : "native-dll", checks, containsCode: true } };
+  }
+
+  if (format.kind === "java-archive") {
+    if (detected !== "zip") return { ok: false, reason: "The file has a .jar extension but is not a Java archive.", report: { format: ext, detected, checks } };
+    const result = inspectZip(data, zipLimits, "any", undefined, { code: { class: "java-class-or-macho-fat" } });
+    if (!result.ok) return { ok: false, reason: result.reason, report: { format: ext, detected, checks } };
+    if (!result.entries.some((e) => e.name.toLowerCase().endsWith(".class"))) {
+      return { ok: false, reason: "The .jar file contains no Java classes.", report: { format: ext, detected, checks } };
+    }
+    checks.push(`Java archive: ${result.entries.length} entries, ${result.totalUncompressed} bytes uncompressed, no nested archives or native code`);
+    return {
+      ok: true,
+      report: { format: ext, detected: "java-archive", checks, containsCode: true, entries: result.entries.filter((e) => !e.isDirectory).map((e) => ({ name: e.name, uncompressedSize: e.uncompressedSize })) },
+    };
+  }
+
   if (FORBIDDEN_CONTENT.has(detected)) {
     return { ok: false, reason: `The file content is ${describeSniffed(detected)}, which is not accepted.`, report: { format: ext, detected, checks } };
   }
-  const format = extCheck.format;
 
   if (format.kind === "zip-package") {
     if (detected !== "zip") {
       return { ok: false, reason: "The file has a .zip extension but is not a ZIP archive.", report: { format: ext, detected, checks } };
     }
-    const inner = PLATFORM_FORMATS[platformId]?.zipInner ?? [];
+    const inner = (rules?.zipInner ?? []).filter((e) => e !== "zip" && e !== "jar");
+    const code = Object.fromEntries(inner.filter((e) => CODE_FORMATS.has(e)).map((e) => [e, "pe-executable" as const]));
+    let codeInside = false;
     const result = inspectZip(
       data,
-      {
-        maxEntries: limits.maxZipEntries,
-        maxTotalUncompressedBytes: limits.maxZipTotalUncompressedBytes,
-        maxCompressionRatio: limits.maxZipCompressionRatio,
-        maxPathDepth: limits.maxZipPathDepth,
-      },
+      zipLimits,
       inner,
       (name, innerExt, content) => {
+        if (innerExt === "dll") {
+          codeInside = true;
+          const pe = inspectPeLibrary(content);
+          return pe.ok ? null : `${name}: ${pe.reason}`;
+        }
         const problem = checkTextConfig(innerExt, content);
         return problem ? `${name}: ${problem}` : null;
       },
+      { code },
     );
     if (!result.ok) return { ok: false, reason: result.reason, report: { format: ext, detected, checks } };
     checks.push(`zip structure valid: ${result.entries.length} entries, ${result.totalUncompressed} bytes uncompressed`);
-    checks.push("no encrypted, nested, executable or path-traversal entries");
+    checks.push(codeInside ? "no encrypted, nested or path-traversal entries; contains plugin DLLs" : "no encrypted, nested, executable or path-traversal entries");
     return {
       ok: true,
       report: {
         format: ext,
         detected,
         checks,
+        containsCode: codeInside,
         entries: result.entries.filter((e) => !e.isDirectory).map((e) => ({ name: e.name, uncompressedSize: e.uncompressedSize })),
       },
     };
@@ -130,6 +174,7 @@ export function validateTemplateFile(
   if (textProblem) return { ok: false, reason: textProblem, report: { format: ext, detected, checks } };
   if (format.kind === "json-config") checks.push("parsed as JSON");
   if (format.kind === "xml-config") checks.push("XML prolog/body check passed, no DOCTYPE/ENTITY");
+  if (format.kind === "pine-script") checks.push("Pine Script text");
   if (format.kind === "opaque-config") checks.push("proprietary configuration format: no executable or archive signature found");
   return { ok: true, report: { format: ext, detected: detected === "unknown" ? format.kind : detected, checks } };
 }

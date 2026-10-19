@@ -5,13 +5,15 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { previewUrl } from "@/lib/env";
 import { formatBytes, formatDate, formatDateTime } from "@/lib/format";
-import { LICENSES, categoryLabel, platformLabel } from "@/lib/catalog";
+import { LICENSES } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 import { PublicationBadge, ScanBadge, ValidationBadge } from "@/components/badges";
 import { ModerationForm, ScanForm } from "@/components/admin/forms";
 
 export const metadata: Metadata = { title: "Review submission" };
 
 export default async function AdminSubmissionPage({ params }: PageProps<"/admin/submissions/[id]">) {
+  const catalog = await getCatalog();
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const supabase = await createClient();
@@ -44,7 +46,7 @@ export default async function AdminSubmissionPage({ params }: PageProps<"/admin/
             <PublicationBadge status={t.publication_status} />
           </div>
           <p className="mt-1 text-sm text-fg-muted">
-            {platformLabel(t.platform_id)} {t.platform_version} · {categoryLabel(t.category_id)} · by{" "}
+            {catalog.platformName(t.platform_id)} {t.platform_version} · {catalog.categoryName(t.category_id)} · by{" "}
             <Link className="underline" href={`/admin/users?q=${creator.username}`}>@{creator.username}</Link> (joined {formatDate(creator.created_at)}
             {creator.is_banned ? ", suspended" : ""}) · <Link className="underline" href={`/t/${t.slug}`}>preview page</Link>
           </p>

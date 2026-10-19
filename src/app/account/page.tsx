@@ -42,7 +42,7 @@ export default async function AccountPage() {
         <h2 id="signin-h" className="text-lg font-semibold text-fg">Sign in</h2>
         <EmailForm email={viewer.email ?? ""} />
         <p className="text-sm text-fg-muted">
-          To change your password, <Link href="/reset-password" className="underline">set a new password</Link> while signed in.
+          To change your password, <Link href="/reset-password" className="underline">set a new password</Link> within 10 minutes of signing in.
         </p>
       </section>
 

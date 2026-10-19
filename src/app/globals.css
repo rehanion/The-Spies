@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* SPIES design tokens: dark neutral surfaces, one restrained accent. */
+/* SPIES design tokens: dark neutral surfaces, the logo's green as the accent. */
 @theme {
   --color-bg: #0b0d10;
   --color-surface: #12151a;
@@ -11,15 +11,17 @@
   --color-fg: #e6e8eb;
   --color-fg-muted: #a3a9b3;
   --color-fg-subtle: #7b828d;
-  --color-accent: #d6a54a;
-  --color-accent-strong: #e8b85c;
-  --color-accent-ink: #1a1408;
+  --color-accent: #5cbf83;
+  --color-accent-strong: #74cf97;
+  --color-accent-ink: #06170d;
+  --color-brand-cream: #efe6cf;
+  --color-brand-green: #1d4a2c;
   --color-ok: #4fb286;
   --color-warn: #d6a54a;
   --color-danger: #e0675c;
   --color-info: #6aa5d8;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   --radius-card: 0.5rem;

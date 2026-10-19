@@ -6,6 +6,7 @@ import { actorHash, ipHash } from "@/lib/request";
 import { serverEnv } from "@/lib/server-env";
 import { storage } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { sanitizeFilename } from "@shared/filename.ts";
 
 function deny(request: NextRequest, status: number, reason: string, message: string) {
@@ -13,7 +14,7 @@ function deny(request: NextRequest, status: number, reason: string, message: str
     return NextResponse.json({ error: reason, message }, { status });
   }
   return new NextResponse(
-    `<!doctype html><meta charset="utf-8"><title>Download unavailable</title><body style="font-family:system-ui;background:#0b0d10;color:#e6e8eb;padding:2rem"><h1 style="font-size:1.2rem">Download unavailable</h1><p>${message}</p><p><a style="color:#d6a54a" href="/browse">Back to SPIES</a></p></body>`,
+    `<!doctype html><meta charset="utf-8"><title>Download unavailable</title><body style="font-family:system-ui;background:#0b0d10;color:#e6e8eb;padding:2rem"><h1 style="font-size:1.2rem">Download unavailable</h1><p>${message}</p><p><a style="color:#5cbf83" href="/browse">Back to SPIES</a></p></body>`,
     { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
   );
 }
@@ -42,10 +43,14 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/download
 
   const viewer = await getViewer();
   if (serverEnv.downloadRequiresLogin() && !viewer) {
-    const admin = createAdminClient();
-    const { data } = await admin.from("template_files").select("templates!inner(slug)").eq("id", fileId).maybeSingle();
+    // Read as the anonymous visitor (RLS), so only a publicly visible listing's
+    // slug can end up in the redirect. Private listings send no `next` at all.
+    const supabase = await createClient();
+    const { data } = await supabase.from("template_files").select("templates!inner(slug)").eq("id", fileId).maybeSingle();
     const slug = (data?.templates as unknown as { slug: string } | undefined)?.slug;
-    return NextResponse.redirect(new URL(`/login?next=${encodeURIComponent(slug ? `/t/${slug}` : "/")}`, request.nextUrl.origin), 303);
+    const login = new URL("/login", request.nextUrl.origin);
+    if (slug) login.searchParams.set("next", `/t/${slug}`);
+    return NextResponse.redirect(login, 303);
   }
   if (viewer?.profile?.is_banned) return deny(request, 403, "suspended", "Your account is suspended.");
 

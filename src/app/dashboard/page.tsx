@@ -5,13 +5,14 @@ import { createClient } from "@/lib/supabase/server";
 import { previewUrl } from "@/lib/env";
 import { formatBytes, formatCount, formatDate } from "@/lib/format";
 import { limits } from "@/lib/server-env";
-import { platformLabel } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 import { PublicationBadge } from "@/components/badges";
 import { EmptyState, Notice } from "@/components/empty-state";
 
 export const metadata: Metadata = { title: "Creator dashboard" };
 
 export default async function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
+  const catalog = await getCatalog();
   const viewer = await requireViewer("/dashboard");
   const sp = await searchParams;
   const supabase = await createClient();
@@ -94,7 +95,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
                           </span>
                           <span>
                             <span className="block font-medium text-fg">{t.title}</span>
-                            <span className="text-xs text-fg-subtle">{platformLabel(t.platform_id)}</span>
+                            <span className="text-xs text-fg-subtle">{catalog.platformName(t.platform_id)}</span>
                           </span>
                         </Link>
                       </td>

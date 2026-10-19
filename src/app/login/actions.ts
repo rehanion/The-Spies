@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/env";
 import { safeNextPath } from "@/lib/safe-redirect";
+import { signedInRecently } from "@/lib/reauth";
 
 export type AuthState = { ok: boolean; message: string } | null;
 
@@ -97,6 +98,14 @@ export async function updatePassword(_prev: AuthState, formData: FormData): Prom
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   if (!data?.claims) return { ok: false, message: "Your reset link expired. Request a new one." };
+  // A reset link counts as a fresh sign in. Otherwise the session must be
+  // less than 10 minutes old, so a left-open session cannot change the password.
+  if (!signedInRecently(data.claims as Record<string, unknown>)) {
+    return {
+      ok: false,
+      message: "For your security, sign in again before you change your password. Then set it within 10 minutes.",
+    };
+  }
   const { error } = await supabase.auth.updateUser({ password: password.data });
   if (error) return { ok: false, message: "Could not update the password. Request a new reset link." };
   redirect("/dashboard?password=updated");

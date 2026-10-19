@@ -4,12 +4,16 @@ import { getViewer } from "@/lib/auth";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { limits, serverEnv } from "@/lib/server-env";
 import { storage } from "@/lib/storage";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { UploadError, checkQuotas } from "@/lib/uploads";
 import { SCREENSHOT_EXTENSIONS, extensionOf } from "@shared/formats.ts";
 
 const bodySchema = z.object({ filename: z.string().min(1).max(255), size: z.number().int().positive() });
 
-// Reserves an avatar upload into the private quarantine bucket. The processor
-// re-encodes it to JPEG and publishes the result; the original is deleted.
+// Reserves an avatar upload into the private avatar-uploads bucket (2 MB per
+// object). The reservation is recorded so the processor only accepts this
+// key and quotas count it. The processor re-encodes the image to JPEG and
+// publishes the result; the original is deleted.
 export async function POST(request: NextRequest) {
   const viewer = await getViewer();
   if (!viewer?.profile) return NextResponse.json({ message: "Sign in first." }, { status: 401 });
@@ -28,9 +32,15 @@ export async function POST(request: NextRequest) {
   }
   const key = `avatars/${viewer.userId}/${crypto.randomUUID()}.bin`;
   try {
-    const signed = await storage.createUploadUrl("quarantine", key);
+    await checkQuotas(viewer.userId, parsed.data.size);
+    const { error } = await createAdminClient()
+      .from("avatar_uploads")
+      .insert({ user_id: viewer.userId, storage_key: key, declared_size_bytes: parsed.data.size });
+    if (error) throw new Error("reservation failed");
+    const signed = await storage.createUploadUrl("avatar-uploads", key);
     return NextResponse.json({ key, uploadUrl: signed.signedUrl });
-  } catch {
+  } catch (e) {
+    if (e instanceof UploadError) return NextResponse.json({ message: e.message }, { status: e.status });
     return NextResponse.json({ message: "Storage is temporarily unavailable." }, { status: 503 });
   }
 }

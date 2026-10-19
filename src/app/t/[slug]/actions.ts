@@ -14,6 +14,7 @@ const slugSchema = z.string().regex(/^[a-z0-9-]{1,96}$/);
 export async function toggleFavorite(templateId: string, slug: string, favorite: boolean): Promise<ActionState> {
   const viewer = await getViewer();
   if (!viewer) return { ok: false, message: "Sign in to save favorites." };
+  if (viewer.profile?.is_banned) return { ok: false, message: "Your account is suspended." };
   if (!uuid.safeParse(templateId).success || !slugSchema.safeParse(slug).success) return { ok: false, message: "Invalid request." };
   if (!(await consumeRateLimit("favorite", viewer.userId))) return { ok: false, message: "Too many requests. Try again later." };
   const supabase = await createClient();

@@ -1,18 +1,22 @@
-// Explicit allowlist of template file formats, per trading platform.
-// Sources (checked 2026-10-19):
-//  - MotiveWave: analyses export as .mwml (JSON); analysis packs and workspace
-//    backups are ZIP files. Custom studies are .jar/.class (executable Java) and
-//    are NOT accepted.
-//  - Sierra Chart: chartbooks (.Cht), study collections (.StdyCollct) and trade
-//    window configs (.twconfig). ACSIL custom studies are native .dll files and
-//    are NOT accepted.
-//  - Quantower: workspaces and templates are XML documents. Custom indicators
-//    are .NET .dll files and are NOT accepted. Quantower backup ZIPs contain
-//    connection credentials, so ZIPs may only contain allowlisted config files.
-// Adding a platform: add a row to public.platforms (migration) and an entry to
-// PLATFORM_FORMATS below. Nothing else needs to change.
+// Allowlist of template file formats. Which formats each platform accepts is
+// stored in public.platforms (upload_formats, zip_formats) so admins can add
+// platforms without a code change; this file defines what each format is and
+// how it is validated.
+//
+// Compiled code (.dll, .jar) is accepted for platforms whose plugins ship that
+// way (ATAS, Sierra Chart ACSIL, Quantower, MotiveWave studies). It is never
+// run by SPIES, is scanned like everything else, and a listing that contains
+// it always waits for a moderator before it is published.
 
-export type FormatKind = "json-config" | "xml-config" | "opaque-config" | "zip-package" | "text-doc";
+export type FormatKind =
+  | "json-config"
+  | "xml-config"
+  | "opaque-config"
+  | "zip-package"
+  | "text-doc"
+  | "pine-script"
+  | "pe-library"
+  | "java-archive";
 
 export interface FileFormat {
   ext: string;
@@ -26,10 +30,22 @@ export const FORMATS: Record<string, FileFormat> = {
   stdycollct: { ext: "stdycollct", label: "Sierra Chart study collection (.StdyCollct)", kind: "opaque-config" },
   twconfig: { ext: "twconfig", label: "Sierra Chart trade window config (.twconfig)", kind: "opaque-config" },
   xml: { ext: "xml", label: "XML configuration (.xml)", kind: "xml-config" },
-  zip: { ext: "zip", label: "ZIP package of configuration files (.zip)", kind: "zip-package" },
-  txt: { ext: "txt", label: "Plain text readme (.txt)", kind: "text-doc" },
+  json: { ext: "json", label: "JSON configuration (.json)", kind: "json-config" },
+  zip: { ext: "zip", label: "ZIP package (.zip)", kind: "zip-package" },
+  txt: { ext: "txt", label: "Plain text (.txt)", kind: "text-doc" },
   md: { ext: "md", label: "Markdown readme (.md)", kind: "text-doc" },
+  pine: { ext: "pine", label: "TradingView Pine Script (.pine)", kind: "pine-script" },
+  dll: { ext: "dll", label: "Compiled plugin (.dll)", kind: "pe-library" },
+  jar: { ext: "jar", label: "Java plugin (.jar)", kind: "java-archive" },
 };
+
+/** Formats that contain code which runs inside the trading platform. */
+export const CODE_FORMATS: ReadonlySet<string> = new Set(["dll", "jar"]);
+
+/** Formats allowed inside a ZIP package (never another archive). */
+export const ZIP_INNER_FORMATS: ReadonlySet<string> = new Set(
+  Object.values(FORMATS).filter((f) => f.kind !== "zip-package" && f.kind !== "java-archive").map((f) => f.ext),
+);
 
 export interface PlatformFormats {
   /** Extensions accepted as a top-level upload. */
@@ -38,17 +54,9 @@ export interface PlatformFormats {
   zipInner: string[];
 }
 
-export const PLATFORM_FORMATS: Record<string, PlatformFormats> = {
-  motivewave: { upload: ["mwml", "zip"], zipInner: ["mwml", "txt", "md"] },
-  "sierra-chart": { upload: ["cht", "stdycollct", "twconfig", "zip"], zipInner: ["cht", "stdycollct", "twconfig", "txt", "md"] },
-  quantower: { upload: ["xml", "zip"], zipInner: ["xml", "txt", "md"] },
-};
-
 /** Extensions refused with a specific explanation. */
 export const BLOCKED_REASONS: Record<string, string> = {
-  dll: "Compiled plugins (.dll) run native code and are not accepted. A separate manual-review process would be required.",
-  jar: "Java archives (.jar) contain executable code and are not accepted.",
-  class: "Java class files contain executable code and are not accepted.",
+  class: "Upload Java plugins as a .jar file.",
   exe: "Executables are never accepted.",
   msi: "Installers are never accepted.",
   bat: "Scripts are never accepted.",
@@ -83,22 +91,17 @@ export function extensionOf(filename: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
-export function allowedUploadExtensions(platformId: string): string[] {
-  return PLATFORM_FORMATS[platformId]?.upload ?? [];
-}
-
 export type ExtensionCheck = { ok: true; format: FileFormat } | { ok: false; reason: string };
 
-export function checkUploadExtension(platformId: string, filename: string): ExtensionCheck {
+export function checkUploadExtension(rules: PlatformFormats | null | undefined, filename: string): ExtensionCheck {
   const ext = extensionOf(filename);
   if (!ext) return { ok: false, reason: "The file has no extension." };
   if (BLOCKED_REASONS[ext]) return { ok: false, reason: BLOCKED_REASONS[ext] };
-  const platform = PLATFORM_FORMATS[platformId];
-  if (!platform) return { ok: false, reason: "Unknown platform." };
-  if (!platform.upload.includes(ext) || !FORMATS[ext]) {
+  if (!rules) return { ok: false, reason: "Unknown platform." };
+  if (!rules.upload.includes(ext) || !FORMATS[ext]) {
     return {
       ok: false,
-      reason: `.${ext} files are not accepted for this platform. Allowed: ${platform.upload.map((e) => "." + e).join(", ")}.`,
+      reason: `.${ext} files are not accepted for this platform. Allowed: ${rules.upload.map((e) => "." + e).join(", ")}.`,
     };
   }
   return { ok: true, format: FORMATS[ext] };

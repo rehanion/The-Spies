@@ -14,7 +14,8 @@ export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/uploa
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
   const viewer = await getViewer();
-  if (!viewer) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (!viewer?.profile) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  if (viewer.profile.is_banned) return NextResponse.json({ error: "suspended", message: "Your account is suspended." }, { status: 403 });
 
   const supabase = await createClient();
   const admin = createAdminClient();
@@ -41,7 +42,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/uploa
 
   const { data: s } = await supabase
     .from("template_screenshots")
-    .select("id, uploader_id, template_id, original_key, public_key, thumb_key, templates!inner(publication_status, cover_screenshot_id)")
+    .select("id, uploader_id, template_id, original_bucket, original_key, public_key, thumb_key, templates!inner(publication_status, cover_screenshot_id)")
     .eq("id", id)
     .maybeSingle();
   if (!s || s.uploader_id !== viewer.userId) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -71,7 +72,7 @@ export async function DELETE(request: NextRequest, ctx: RouteContext<"/api/uploa
       .maybeSingle();
     await admin.from("templates").update({ cover_screenshot_id: next?.id ?? null }).eq("id", s.template_id);
   }
-  await storage.remove("quarantine", [s.original_key]);
+  await storage.remove(s.original_bucket === "quarantine" ? "quarantine" : "screenshot-uploads", [s.original_key]);
   await storage.remove("previews", [s.public_key, s.thumb_key].filter((k): k is string => !!k));
   return NextResponse.json({ ok: true });
 }

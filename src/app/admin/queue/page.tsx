@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { formatBytes, formatDateTime } from "@/lib/format";
-import { platformLabel } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 import { PublicationBadge, ScanBadge } from "@/components/badges";
 import { EmptyState } from "@/components/empty-state";
 
 export const metadata: Metadata = { title: "Moderation queue" };
 
 export default async function QueuePage() {
+  const catalog = await getCatalog();
   const supabase = await createClient();
   const [{ data: pending }, { data: scanQueue }] = await Promise.all([
     supabase
@@ -39,7 +40,7 @@ export default async function QueuePage() {
               return (
                 <li key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
                   <Link href={`/admin/submissions/${t.id}`} className="font-medium text-fg hover:text-accent">{t.title}</Link>
-                  <span className="text-xs text-fg-subtle">{platformLabel(t.platform_id)} · @{(t.creator as unknown as { username: string }).username}</span>
+                  <span className="text-xs text-fg-subtle">{catalog.platformName(t.platform_id)} · @{(t.creator as unknown as { username: string }).username}</span>
                   <PublicationBadge status={t.publication_status} />
                   <span className={`text-xs ${ready ? "text-ok" : "text-warn"}`}>{ready ? "All files scanned clean" : `${files.filter((f) => f.scan_status !== "clean").length} file(s) need scanning`}</span>
                   <span className="ml-auto text-xs text-fg-subtle">submitted {formatDateTime(t.submitted_at)}</span>

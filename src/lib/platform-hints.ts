@@ -1,7 +1,7 @@
-import { FORMATS, PLATFORM_FORMATS } from "@shared/formats.ts";
+import { getCatalog } from "@/lib/data/catalog";
 
-export function platformHints(): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(PLATFORM_FORMATS).map(([id, f]) => [id, f.upload.map((ext) => FORMATS[ext]?.label ?? `.${ext}`).join(", ")]),
-  );
+/** Accepted file types per active platform, for upload form hints. */
+export async function platformHints(): Promise<Record<string, string>> {
+  const catalog = await getCatalog();
+  return Object.fromEntries(catalog.activePlatforms.map((x) => [x.id, catalog.formatsText(x.id)]));
 }

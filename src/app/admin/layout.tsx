@@ -14,6 +14,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
             ["/admin/queue", "Moderation queue"],
             ["/admin/reports", "Reports"],
             ["/admin/users", "Users"],
+            ["/admin/catalog", "Platforms & categories"],
             ["/admin/audit", "Audit log"],
           ].map(([href, label]) => (
             <Link key={href} href={href} className="rounded px-2.5 py-1.5 text-fg-muted hover:bg-surface-2 hover:text-fg">

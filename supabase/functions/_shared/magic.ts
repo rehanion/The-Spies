@@ -80,3 +80,28 @@ export function describeSniffed(s: Sniffed): string {
     default: return "unknown content";
   }
 }
+
+export type PeInfo = { ok: true; machine: number; is64: boolean; isDotNet: boolean } | { ok: false; reason: string };
+
+/** Checks that a PE file is a well-formed DLL (not an .exe) and reports its architecture. */
+export function inspectPeLibrary(data: Uint8Array): PeInfo {
+  if (data.length < 0x40 || data[0] !== 0x4d || data[1] !== 0x5a) return { ok: false, reason: "The file is not a Windows DLL." };
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const peOffset = view.getUint32(0x3c, true);
+  if (peOffset < 0x40 || peOffset + 24 > data.length) return { ok: false, reason: "The DLL header is malformed." };
+  if (view.getUint32(peOffset, true) !== 0x00004550) return { ok: false, reason: "The DLL header is malformed." };
+  const machine = view.getUint16(peOffset + 4, true);
+  const optSize = view.getUint16(peOffset + 20, true);
+  const characteristics = view.getUint16(peOffset + 22, true);
+  if ((characteristics & 0x2000) === 0) return { ok: false, reason: "The file is a program (.exe), not a plugin DLL. Programs are never accepted." };
+  const opt = peOffset + 24;
+  if (optSize < 2 || opt + optSize > data.length) return { ok: false, reason: "The DLL header is malformed." };
+  const magic = view.getUint16(opt, true);
+  if (magic !== 0x10b && magic !== 0x20b) return { ok: false, reason: "The DLL header is malformed." };
+  const is64 = magic === 0x20b;
+  // Data directory 14 (CLR runtime header) is present for .NET assemblies.
+  const dirBase = opt + (is64 ? 112 : 96);
+  const clr = dirBase + 14 * 8;
+  const isDotNet = clr + 8 <= opt + optSize && view.getUint32(clr, true) !== 0;
+  return { ok: true, machine, is64, isDotNet };
+}

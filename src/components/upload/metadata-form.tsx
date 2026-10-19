@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { CATEGORY_LABELS, LICENSES, PLATFORM_LABELS } from "@/lib/catalog";
+import { LICENSES } from "@/lib/catalog";
+import { useCatalog } from "@/components/catalog-provider";
 import type { FormState } from "@/app/dashboard/actions";
 import { Turnstile } from "@/components/turnstile";
 
@@ -59,6 +60,7 @@ export function MetadataForm({
   platformHints: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
+  const catalog = useCatalog();
   const invalid = (name: string) => (state?.fieldErrors?.[name] ? { "aria-invalid": true, "aria-describedby": `${name}-error` } : {});
   return (
     <form action={formAction} className="space-y-6">
@@ -78,14 +80,14 @@ export function MetadataForm({
           <label htmlFor="platform_id" className="label">Platform</label>
           <select id="platform_id" name="platform_id" required defaultValue={values.platform_id} className="input" {...invalid("platform_id")}>
             <option value="" disabled>Choose a platform</option>
-            {Object.entries(PLATFORM_LABELS).map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
+            {catalog.activePlatforms.map((x) => (
+              <option key={x.id} value={x.id}>{x.name}</option>
             ))}
           </select>
           <p className="hint">
             Accepted files:{" "}
             {Object.entries(platformHints).map(([id, hint]) => (
-              <span key={id} className="block">{PLATFORM_LABELS[id]}: {hint}</span>
+              <span key={id} className="block">{catalog.platformName(id)}: {hint}</span>
             ))}
           </p>
           <FieldError name="platform_id" state={state} />
@@ -98,8 +100,8 @@ export function MetadataForm({
           <label htmlFor="category_id" className="label">Category</label>
           <select id="category_id" name="category_id" required defaultValue={values.category_id} className="input" {...invalid("category_id")}>
             <option value="" disabled>Choose a category</option>
-            {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
-              <option key={id} value={id}>{label}</option>
+            {catalog.categories.map((x) => (
+              <option key={x.id} value={x.id}>{x.name}</option>
             ))}
           </select>
           <FieldError name="category_id" state={state} />

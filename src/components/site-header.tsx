@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getViewer, isStaff } from "@/lib/auth";
 import { previewUrl } from "@/lib/env";
 import { Logo } from "@/components/logo";
-import { PLATFORM_LABELS } from "@/lib/catalog";
+import { getCatalog } from "@/lib/data/catalog";
 
 export async function SiteHeader() {
   const viewer = await getViewer();
@@ -78,8 +78,8 @@ export async function SiteHeader() {
         <NavLink href="/browse?sort=trending">Explore</NavLink>
         {profile ? <NavLink href="/feed">Following</NavLink> : null}
         {profile ? <NavLink href="/library">Saved</NavLink> : null}
-        {Object.entries(PLATFORM_LABELS).map(([id, label]) => (
-          <NavLink key={id} href={`/browse?platform=${id}`}>{label}</NavLink>
+        {(await getCatalog()).platforms.map((x) => (
+          <NavLink key={x.id} href={`/browse?platform=${x.id}`}>{x.name}</NavLink>
         ))}
       </nav>
     </header>
