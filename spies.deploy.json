@@ -3,6 +3,5 @@
   "supabasePublishableKey": "sb_publishable_UOG3wJ_zCwMjA9vDqQvSfw_IlEzoTty",
   "workerName": "spies",
   "scannerEmail": "scanner@spies.invalid",
-  "emailConfirmation": false,
   "cloudflareAccountId": "4082fd90e654fb3c8fc70eaa353ea368"
 }

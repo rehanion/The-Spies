@@ -135,8 +135,33 @@ async function cloudflareEnv() {
 
 const sql = (query) => sb(`/projects/${REF}/database/query`, { method: "POST", body: JSON.stringify({ query }) });
 
+// Free SMTP (for example Brevo) from spies.deploy.json "smtp" plus the SMTP_PASSWORD
+// repository secret. Without both, Supabase's built-in mailer is used and
+// accounts are active without confirmation.
+function smtpSettings() {
+  const smtp = config.smtp;
+  const password = process.env.SMTP_PASSWORD;
+  if (!smtp?.host || !password) {
+    if (smtp?.host) console.log("::notice::smtp is set in spies.deploy.json but the SMTP_PASSWORD secret is missing, so emails stay off.");
+    return null;
+  }
+  console.log(`::add-mask::${password}`);
+  return {
+    smtp_host: smtp.host,
+    smtp_port: String(smtp.port ?? 587),
+    smtp_user: smtp.user,
+    smtp_pass: password,
+    smtp_admin_email: smtp.senderEmail,
+    smtp_sender_name: smtp.senderName ?? "SPIES",
+    // Brevo's free plan sends 300 emails a day.
+    rate_limit_email_sent: smtp.perHour ?? 30,
+  };
+}
+
 async function configure() {
   const site = need("NEXT_PUBLIC_SITE_URL");
+  const smtp = smtpSettings();
+  const emails = Boolean(smtp);
   const template = (name) => readFileSync(new URL(`../supabase/templates/${name}.html`, import.meta.url), "utf8");
   await sb(`/projects/${REF}/config/auth`, {
     method: "PATCH",
@@ -146,7 +171,7 @@ async function configure() {
       disable_signup: false,
       // Supabase's built-in email only reaches the project's own team, so until
       // a free SMTP provider is added, accounts are active without confirmation.
-      mailer_autoconfirm: !config.emailConfirmation,
+      mailer_autoconfirm: !emails,
       password_min_length: 10,
       password_required_characters: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:0123456789",
       security_captcha_enabled: true,
@@ -154,8 +179,9 @@ async function configure() {
       security_captcha_secret: need("TURNSTILE_SECRET_KEY"),
       refresh_token_rotation_enabled: true,
       // Free projects can only customise emails once a custom SMTP provider is set.
-      ...(config.emailConfirmation
+      ...(emails
         ? {
+            ...smtp,
             mailer_subjects_confirmation: "Confirm your SPIES account",
             mailer_templates_confirmation_content: template("confirmation"),
             mailer_subjects_recovery: "Reset your SPIES password",
@@ -164,7 +190,7 @@ async function configure() {
         : {}),
     }),
   });
-  console.log("Auth settings updated");
+  console.log(`Auth settings updated (emails ${emails ? "on" : "off"})`);
 
   await sb(`/projects/${REF}/secrets`, {
     method: "POST",
