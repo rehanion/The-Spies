@@ -75,11 +75,19 @@ async function cloudflareEnv() {
   }
   exportEnv("CLOUDFLARE_ACCOUNT_ID", account, { secret: false });
 
+  // Report what the token is allowed to do, so a permission problem is obvious in the log.
+  for (const path of ["/user/tokens/verify", `/accounts/${account}/tokens/verify`]) {
+    try {
+      console.log(`Token check ${path}: ${(await cf(path))?.status}`);
+    } catch (e) {
+      console.log(`Token check ${path}: ${e.message}`);
+    }
+  }
   let sub = null;
   try {
     sub = (await cf(`/accounts/${account}/workers/subdomain`))?.subdomain ?? null;
-  } catch {
-    sub = null;
+  } catch (e) {
+    console.log(`No workers.dev subdomain yet (${e.message})`);
   }
   if (!sub) {
     sub = `spies-${account.slice(0, 6)}`;
