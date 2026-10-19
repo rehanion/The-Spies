@@ -39,3 +39,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# cloudflare / opennext
+.open-next
+.wrangler
+.dev.vars
+cloudflare-env.d.ts
+
+# supabase local
+supabase/.temp
+supabase/.branches
+supabase/functions/.local-ca.pem
+
+# tests
+/test-results
+/playwright-report
+/tests/.tmp

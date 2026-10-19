@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Cache Components is off: almost every page depends on the signed-in user
+  // and on moderation state, so pages render dynamically per request.
+  poweredByHeader: false,
+  reactStrictMode: true,
+  images: { unoptimized: true },
   turbopack: {
     rules: {
       "*.css": {
@@ -11,6 +13,9 @@ const nextConfig: NextConfig = {
         as: "*.css",
       },
     },
+  },
+  experimental: {
+    serverActions: { bodySizeLimit: "1mb" },
   },
 };
 

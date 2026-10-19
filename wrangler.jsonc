@@ -1,0 +1,16 @@
+// Cloudflare Workers config for the OpenNext adapter. Free plan: no paid
+// bindings (no R2, KV, D1, Durable Objects or Images) are used.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spies",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}

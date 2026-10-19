@@ -1,69 +1,95 @@
-import Image from "next/image";
+import Link from "next/link";
+import { searchTemplates } from "@/lib/data/templates";
+import { TemplateGrid } from "@/components/template-card";
+import { EmptyState, Notice } from "@/components/empty-state";
+import { CATEGORY_LABELS, PLATFORM_LABELS } from "@/lib/catalog";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+const PLATFORM_BLURBS: Record<string, string> = {
+  motivewave: "Analyses (.mwml) and analysis packs",
+  "sierra-chart": "Chartbooks, study collections, trade window configs",
+  quantower: "Workspace and template XML files",
+};
+
+export default async function HomePage() {
+  const [recent, popular] = await Promise.all([
+    searchTemplates({ sort: "recent", pageSize: 8 }),
+    searchTemplates({ sort: "downloads", pageSize: 8 }),
+  ]);
+  const hasDemo = [...recent.items, ...popular.items].some((i) => i.is_demo);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <section className="border-b border-line py-12 sm:py-16">
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent">Order-flow template library</p>
+        <h1 className="mt-3 max-w-3xl text-3xl font-semibold tracking-tight text-fg sm:text-4xl">
+          Footprint, volume profile and DOM setups shared by traders, inspected before you download.
+        </h1>
+        <p className="mt-4 max-w-2xl text-fg-muted">
+          Browse screenshots and configuration details for MotiveWave, Sierra Chart and Quantower. Every file is held in
+          private quarantine until it passes validation, a ClamAV scan and moderator review. Free for everyone.
+        </p>
+        <form action="/browse" method="get" role="search" className="mt-6 flex max-w-xl gap-2">
+          <label htmlFor="home-search" className="sr-only">Search templates</label>
+          <input id="home-search" name="q" type="search" placeholder="Try “footprint”, “delta”, “composite profile”…" className="input h-11" />
+          <button type="submit" className="btn btn-primary h-11 px-5">Search</button>
+        </form>
+      </section>
+
+      <section aria-labelledby="platforms-heading" className="py-10">
+        <h2 id="platforms-heading" className="text-sm font-semibold uppercase tracking-wider text-fg-muted">Platforms</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {Object.entries(PLATFORM_LABELS).map(([id, label]) => (
+            <Link key={id} href={`/browse?platform=${id}`} className="card p-4 transition-colors hover:border-accent/50">
+              <p className="font-medium text-fg">{label}</p>
+              <p className="mt-1 text-xs text-fg-subtle">{PLATFORM_BLURBS[id]}</p>
+            </Link>
+          ))}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </section>
+
+      {hasDemo ? (
+        <Notice title="Demonstration content">
+          Listings marked <strong>Demo</strong> are sample data for development and testing. They are not real community
+          uploads, and their counts start at zero.
+        </Notice>
+      ) : null}
+
+      <section aria-labelledby="recent-heading" className="py-10">
+        <div className="mb-4 flex items-baseline justify-between">
+          <h2 id="recent-heading" className="text-lg font-semibold text-fg">Recently published</h2>
+          <Link href="/browse?sort=recent" className="text-sm text-fg-muted hover:text-accent">View all →</Link>
         </div>
-      </main>
+        {recent.items.length ? (
+          <TemplateGrid items={recent.items} />
+        ) : (
+          <EmptyState title="No templates published yet" action={<Link href="/dashboard/new" className="btn btn-primary">Share the first template</Link>}>
+            Approved templates appear here once they pass scanning and review.
+          </EmptyState>
+        )}
+      </section>
+
+      {popular.items.some((i) => i.download_count > 0) ? (
+        <section aria-labelledby="popular-heading" className="py-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 id="popular-heading" className="text-lg font-semibold text-fg">Most downloaded</h2>
+            <Link href="/browse?sort=downloads" className="text-sm text-fg-muted hover:text-accent">View all →</Link>
+          </div>
+          <TemplateGrid items={popular.items.filter((i) => i.download_count > 0)} />
+        </section>
+      ) : null}
+
+      <section aria-labelledby="categories-heading" className="py-10">
+        <h2 id="categories-heading" className="text-lg font-semibold text-fg">Categories</h2>
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          {Object.entries(CATEGORY_LABELS).map(([id, label]) => (
+            <Link key={id} href={`/browse?category=${id}`} className="rounded-md border border-line bg-surface px-3 py-2.5 text-sm text-fg-muted transition-colors hover:border-line-strong hover:text-fg">
+              {label}
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
