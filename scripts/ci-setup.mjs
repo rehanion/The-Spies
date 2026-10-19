@@ -189,12 +189,15 @@ async function scannerLogin() {
 }
 
 const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure, "scanner-login": scannerLogin };
-const step = steps[process.argv[2]];
-if (!step) {
-  console.error(`Usage: ci-setup.mjs ${Object.keys(steps).join("|")}`);
+// Several steps can run in one call (later steps see earlier exports).
+const names = process.argv.slice(2);
+if (!names.length || names.some((n) => !steps[n])) {
+  console.error(`Usage: ci-setup.mjs <${Object.keys(steps).join("|")}>...`);
   process.exit(2);
 }
-await step().catch((e) => {
-  console.error(`::error::${e.message}`);
-  process.exit(1);
-});
+for (const name of names) {
+  await steps[name]().catch((e) => {
+    console.error(`::error::${e.message}`);
+    process.exit(1);
+  });
+}

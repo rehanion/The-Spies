@@ -36,8 +36,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          node scripts/ci-setup.mjs supabase
-          node scripts/ci-setup.mjs scanner-login
+          node scripts/ci-setup.mjs supabase scanner-login
           # The scanner only needs its own one-time login; drop the server key and password.
           echo "SPIES_ADMIN_PASSWORD=" >> "$GITHUB_ENV"
           echo "SUPABASE_SECRET_KEY=" >> "$GITHUB_ENV"
