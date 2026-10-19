@@ -94,7 +94,8 @@ export default async function SubmissionPage({ params, searchParams }: PageProps
         {sp.created ? <Notice tone="ok" title="Details saved">Now add your template files and screenshots below, then submit for review.</Notice> : null}
         {t.publication_status === "pending" ? (
           <Notice tone="warn" title="Pending review">
-            Your files are in private quarantine. An administrator will scan them with ClamAV and review the listing. Downloads stay disabled until both steps succeed.
+            Your files are in private quarantine until the ClamAV virus scan passes, which usually takes 5 to 20 minutes. Meanwhile, <Link className="underline" href="/upload">upload another template</Link> or{" "}
+            <Link className="underline" href="/browse?sort=trending">explore</Link>.
           </Notice>
         ) : null}
         {t.publication_status === "rejected" ? <Notice tone="danger" title="Rejected">{t.moderation_note ?? "No reason given."} Fix the issue and resubmit.</Notice> : null}

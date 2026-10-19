@@ -103,6 +103,12 @@ export default async function TemplatePage({ params }: PageProps<"/t/[slug]">) {
                 ? "Because it includes a plugin or a file type we cannot check, a moderator looks at it after the virus scan."
                 : "It goes live automatically once the virus scan has passed."
               : <>Status: <strong>{t.publication_status}</strong>.</>}
+            {t.publication_status === "pending" && isOwner ? (
+              <>
+                {" "}The scan usually takes 5 to 20 minutes. Meanwhile, <Link className="underline" href="/upload">upload another template</Link> or{" "}
+                <Link className="underline" href="/browse?sort=trending">explore</Link>.
+              </>
+            ) : null}
             {t.moderation_note ? <> Note: {t.moderation_note}</> : null}{" "}
             {isOwner ? <Link className="underline" href={`/dashboard/submissions/${t.id}`}>Manage this upload</Link> : null}
           </Notice>

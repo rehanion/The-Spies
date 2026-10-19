@@ -130,7 +130,7 @@ export function UploadForm({
       ...files.map((file) => ({ file, kind: "file" as const })),
       ...shots.map((file) => ({ file, kind: "screenshot" as const })),
     ];
-    for (let i = 0; i < all.length; i++) {
+    const send = async (i: number) => {
       const { file, kind } = all[i];
       const step = i + 1;
       update(step, { state: "working", progress: 0 });
@@ -145,7 +145,13 @@ export function UploadForm({
         failed = true;
         update(step, { state: "error", message: e instanceof Error ? e.message : "Upload failed." });
       }
-    }
+    };
+    // Files and screenshots upload side by side; each kind stays in order so
+    // screenshot positions follow the order they were chosen in.
+    const lane = async (kind: "file" | "screenshot") => {
+      for (let i = 0; i < all.length; i++) if (all[i].kind === kind) await send(i);
+    };
+    await Promise.all([lane("file"), lane("screenshot")]);
 
     const last = all.length + 1;
     if (failed) {
