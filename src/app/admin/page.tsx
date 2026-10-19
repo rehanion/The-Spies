@@ -20,8 +20,8 @@ async function processorHealth(): Promise<{ ok: boolean; detail: string }> {
     if (res.status === 400) return { ok: true, detail: "Reachable, secret accepted" };
     if (res.status === 401) return { ok: false, detail: "Secret rejected: PROCESSOR_SECRET differs between app and function" };
     return { ok: false, detail: `Unexpected HTTP ${res.status}` };
-  } catch {
-    return { ok: false, detail: "Unreachable: deploy the process-upload Edge Function" };
+  } catch (err) {
+    return { ok: false, detail: `Unreachable: ${err instanceof Error ? err.message : "unknown error"}` };
   }
 }
 
