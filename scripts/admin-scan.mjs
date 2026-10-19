@@ -28,6 +28,8 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { createClient } from "@supabase/supabase-js";
+// Errors show up as annotations on the GitHub run.
+const GH = process.env.GITHUB_ACTIONS ? "::error::" : "";
 
 function loadDotEnv(file) {
   if (!existsSync(file)) return;
@@ -56,7 +58,7 @@ if (args.help) {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 if (!url || !key) {
-  console.error("Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (public values).");
+  console.error(GH + "Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (public values).");
   process.exit(2);
 }
 
@@ -79,7 +81,7 @@ function clamArgs(extra) {
 function clamVersion() {
   const r = spawnSync(args.clamscan, clamArgs(["--version"]), { encoding: "utf8" });
   if (r.error || r.status !== 0) {
-    console.error(`Could not run ${args.clamscan}. Install ClamAV (see docs/MANUAL_SCANNING.md).`);
+    console.error(GH + `Could not run ${args.clamscan}. Install ClamAV (see docs/MANUAL_SCANNING.md).`);
     process.exit(2);
   }
   // "ClamAV 1.5.4/27801/Mon Oct 19 08:23:01 2026" (engine/daily signature version/date)
@@ -91,7 +93,7 @@ function clamVersion() {
     signature = `custom database ${basename(args.database)} sha256:${createHash("sha256").update(db).digest("hex").slice(0, 16)}`;
   }
   if (!signature) {
-    console.error("ClamAV reports no signature database. Run `freshclam` first.");
+    console.error(GH + "ClamAV reports no signature database. Run `freshclam` first.");
     process.exit(2);
   }
   return { engine: engine.trim(), signature };
@@ -120,12 +122,12 @@ const { data: auth, error: authError } = tokenHash
       password: process.env.SPIES_ADMIN_PASSWORD || (await ask("Password: ", true)),
     });
 if (authError || !auth.user) {
-  console.error(`Sign-in failed: ${authError?.message ?? "unknown error"}`);
+  console.error(GH + `Sign-in failed: ${authError?.message ?? "unknown error"}`);
   process.exit(2);
 }
 const { data: me } = await db.from("profiles").select("role, is_banned").eq("id", auth.user.id).single();
 if (!me || me.is_banned || !["admin", "moderator"].includes(me.role)) {
-  console.error("This account is not a moderator or admin.");
+  console.error(GH + "This account is not a moderator or admin.");
   process.exit(2);
 }
 
@@ -141,7 +143,7 @@ const { data: files, error } = await db
   .order("created_at")
   .limit(Number.parseInt(args.limit, 10) || 50);
 if (error) {
-  console.error(`Could not list pending files: ${error.message}`);
+  console.error(GH + `Could not list pending files: ${error.message}`);
   process.exit(2);
 }
 if (!files.length) {
