@@ -14,6 +14,7 @@
 //   node scripts/ci-setup.mjs scanner-login   one-time scanner login token, as a step output only
 //   node scripts/ci-setup.mjs pending         count files waiting for a scan
 //   node scripts/ci-setup.mjs cleanup         delete stale upload reservations and unused stored objects
+//   node scripts/ci-setup.mjs probe           check the Edge Function answers and accepts the secret
 //
 // This script uses only Node.js built-ins, so it runs before any dependency
 // is installed.
@@ -314,6 +315,18 @@ async function cleanup() {
   console.log(`Removed ${removed} unused stored object(s)`);
 }
 
+// The Edge Function answers a request with no kind with HTTP 400 once the secret matches.
+async function probe() {
+  const res = await fetch(`${need("NEXT_PUBLIC_SUPABASE_URL")}/functions/v1/process-upload`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-processor-secret": need("PROCESSOR_SECRET") },
+    body: JSON.stringify({ kind: "health" }),
+  });
+  const text = (await res.text()).slice(0, 200);
+  console.log(`::notice::Upload processor: HTTP ${res.status} ${text}`);
+  if (res.status !== 400) throw new Error(`Upload processor check failed (HTTP ${res.status})`);
+}
+
 const steps = {
   supabase: supabaseEnv,
   cloudflare: cloudflareEnv,
@@ -323,6 +336,7 @@ const steps = {
   "scanner-login": scannerLogin,
   pending,
   cleanup,
+  probe,
 };
 // Several steps can run in one call (later steps see earlier exports).
 const names = process.argv.slice(2);

@@ -23,8 +23,10 @@ export async function runProcessor(body: ProcessorRequest): Promise<{ httpStatus
       body: JSON.stringify(body),
     });
     const data = (await res.json().catch(() => ({}))) as ProcessorResponse;
+    if (res.status >= 500) console.error("process-upload answered", res.status, data.error ?? "");
     return { httpStatus: res.status, data };
-  } catch {
+  } catch (err) {
+    console.error("process-upload unreachable", err instanceof Error ? err.message : err);
     return { httpStatus: 503, data: { error: "processor_unreachable" } };
   }
 }
