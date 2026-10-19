@@ -8,6 +8,7 @@
 //   node scripts/ci-setup.mjs cloudflare  account, workers.dev URL, Turnstile widget
 //   node scripts/ci-setup.mjs configure   Auth settings, function secrets, scanner account
 //   node scripts/ci-setup.mjs scanner-login  one-time login token for the scan job
+//   node scripts/ci-setup.mjs pending     count files waiting for a scan
 //
 // No step here can enable billing: it only reads keys, creates a Turnstile
 // widget (free) and a Supabase "secret" API key, and changes settings.
@@ -188,7 +189,17 @@ async function scannerLogin() {
   exportEnv("SPIES_ADMIN_TOKEN_HASH", hash);
 }
 
-const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure, "scanner-login": scannerLogin };
+// How many files wait for a scan, so the frequent scan job can stop early when there are none.
+async function pending() {
+  const rows = await sql(
+    "select count(*)::int as n from public.template_files where is_current and validation_status = 'passed' and scan_status = 'pending'",
+  );
+  const n = rows[0]?.n ?? 0;
+  console.log(`${n} file(s) waiting for a scan`);
+  exportEnv("SPIES_PENDING", String(n), { secret: false });
+}
+
+const steps = { supabase: supabaseEnv, cloudflare: cloudflareEnv, configure, "scanner-login": scannerLogin, pending };
 // Several steps can run in one call (later steps see earlier exports).
 const names = process.argv.slice(2);
 if (!names.length || names.some((n) => !steps[n])) {

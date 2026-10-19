@@ -1,6 +1,8 @@
-# Automatic ClamAV scanning. Runs on GitHub's free runners every hour (and on
-# demand), downloads files waiting for a scan with a dedicated moderator
-# account, scans them with up-to-date ClamAV signatures and records the result.
+# Automatic ClamAV scanning on GitHub's free runners, every 5 minutes (GitHub
+# may start scheduled runs a few minutes late) and on demand. When nothing is
+# waiting it stops after one database query. Otherwise it downloads waiting
+# files with a dedicated moderator account, scans them with up-to-date ClamAV
+# signatures and records the result.
 # With auto-publish on, clean listings go live right after this job.
 #
 # Needs the SUPABASE_ACCESS_TOKEN repository secret. The scanner signs in as
@@ -10,7 +12,7 @@ name: Virus scan
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -31,8 +33,13 @@ jobs:
         with:
           node-version: 22
 
-      # Only the script's one dependency is installed; the website is not built here.
+      - name: Check for files waiting for a scan
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: node scripts/ci-setup.mjs pending
+
       - name: Look up the scanner login
+        if: env.SPIES_PENDING != '0'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
@@ -43,18 +50,22 @@ jobs:
           echo "PROCESSOR_SECRET=" >> "$GITHUB_ENV"
           echo "ACTOR_HASH_SALT=" >> "$GITHUB_ENV"
 
+      # Only the script's one dependency is installed; the website is not built here.
       - name: Install scanner dependencies
+        if: env.SPIES_PENDING != '0'
         run: |
           mkdir -p /tmp/scanner && cp scripts/admin-scan.mjs /tmp/scanner/
           cd /tmp/scanner && npm init -y >/dev/null && npm install --no-audit --no-fund @supabase/supabase-js@2.118.0
 
       - name: Install ClamAV
+        if: env.SPIES_PENDING != '0'
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q clamav
           sudo systemctl stop clamav-freshclam || true
 
       - name: Restore signature cache
+        if: env.SPIES_PENDING != '0'
         uses: actions/cache@v5
         with:
           path: /tmp/clamav-db
@@ -62,6 +73,7 @@ jobs:
           restore-keys: clamav-db-
 
       - name: Update signatures
+        if: env.SPIES_PENDING != '0'
         run: |
           mkdir -p /tmp/clamav-db
           sudo cp -n /tmp/clamav-db/* /var/lib/clamav/ 2>/dev/null || true
@@ -69,5 +81,6 @@ jobs:
           sudo cp /var/lib/clamav/*.c?d /tmp/clamav-db/ && sudo chown -R "$USER" /tmp/clamav-db
 
       - name: Scan pending files
+        if: env.SPIES_PENDING != '0'
         working-directory: /tmp/scanner
         run: node admin-scan.mjs --limit 100

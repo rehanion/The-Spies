@@ -1,6 +1,6 @@
 # Manual malware scanning with ClamAV
 
-> **Normally you do not need this.** The hourly GitHub Actions job
+> **Normally you do not need this.** The GitHub Actions job that runs every 5 minutes
 > (`.github/workflows/scan.yml`) runs the same scanner automatically on GitHub's
 > free runners. This page is the fallback for when that job is paused, failing,
 > or you want to scan a file yourself.

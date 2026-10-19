@@ -225,7 +225,7 @@ are read from the database, never from user-editable JWT metadata.
 
 ## Moderation and scanning
 
-- **Automatic scanning.** `.github/workflows/scan.yml` runs every hour on GitHub's free runners: it installs
+- **Automatic scanning.** `.github/workflows/scan.yml` runs every 5 minutes on GitHub's free runners (it stops at once when nothing is waiting): it installs
   ClamAV, updates signatures, signs in as a dedicated moderator account and scans every pending file with
   `scripts/admin-scan.mjs`. Clean files publish their listing automatically; infected files are flagged and
   never downloadable. Secrets: `SPIES_SUPABASE_URL`, `SPIES_SUPABASE_PUBLISHABLE_KEY`, `SPIES_SCANNER_EMAIL`,

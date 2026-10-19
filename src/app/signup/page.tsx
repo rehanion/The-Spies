@@ -14,7 +14,7 @@ export default async function SignupPage() {
   return (
     <AuthShell
       title="Create your free account"
-      subtitle="No paid tiers, no ads. You will receive a confirmation email."
+      subtitle="Free forever. No paid tiers, no ads. Your email is never shown to anyone."
       footer={<>Already registered? <Link href="/login" className="text-accent hover:underline">Sign in</Link></>}
     >
       <SignupForm siteKey={publicEnv.turnstileSiteKey()} nonce={await getNonce()} />
